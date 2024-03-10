@@ -3,6 +3,7 @@ import { Fragment } from "react";
 import NetworkNodesTable from "@/app/network-nodes/network-nodes-table";
 import NetworkNodeForm from "@/app/network-nodes/network-node-form";
 
+export const dynamic = 'force-dynamic';
 export default async function networkNodesPage() {
   const nodes = await getNetworkNodes();
 

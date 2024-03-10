@@ -5,12 +5,10 @@ import { IptablesDatabaseGroupInterface } from "@/iptables/interfaces/iptables-d
 import { getDatabaseConnection } from "@/iptables/iptables-database";
 import { execAppendGroup, execRemoveGroup } from "@/iptables/iptables-exec";
 
-const connectionPromise = getDatabaseConnection();
-
 export async function getIptablesGroups(): Promise<
   IptablesDatabaseInterface["groups"]
 > {
-  const connection = await connectionPromise;
+  const connection = await getDatabaseConnection();
 
   await connection.read();
 
@@ -20,7 +18,7 @@ export async function getIptablesGroups(): Promise<
 export async function addIptablesGroup(
   group: IptablesDatabaseGroupInterface,
 ): Promise<void> {
-  const connection = await connectionPromise;
+  const connection = await getDatabaseConnection();
 
   connection.data.groups.push(group);
 
@@ -32,7 +30,7 @@ export async function addIptablesGroup(
 export async function updateIptablesGroup(
   group: IptablesDatabaseGroupInterface,
 ): Promise<void> {
-  const connection = await connectionPromise;
+  const connection = await getDatabaseConnection();
   const index = connection.data.groups.findIndex(
     (item) => item.id === group.id,
   );
@@ -51,7 +49,7 @@ export async function updateIptablesGroup(
 export async function updateOrCreateGroup(
   group: IptablesDatabaseGroupInterface,
 ): Promise<void> {
-  const connection = await connectionPromise;
+  const connection = await getDatabaseConnection();
 
   const index = connection.data.groups.findIndex(
     (item) => item.id === group.id,
@@ -67,7 +65,7 @@ export async function updateOrCreateGroup(
 export async function deleteGroup(
   group: IptablesDatabaseGroupInterface,
 ): Promise<void> {
-  const connection = await connectionPromise;
+  const connection = await getDatabaseConnection();
 
   const index = connection.data.groups.findIndex(
     (item) => group.id !== item.id,
