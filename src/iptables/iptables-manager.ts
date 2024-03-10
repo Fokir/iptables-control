@@ -71,11 +71,13 @@ export async function deleteGroup(
     (item) => group.id !== item.id,
   );
 
-  await execRemoveGroup(connection.data.groups[index]);
+  if (index > -1) {
+    await execRemoveGroup(connection.data.groups[index]);
 
-  connection.data.groups = connection.data.groups.filter(
-    (item) => group.id !== item.id,
-  );
+    connection.data.groups = connection.data.groups.filter(
+      (item) => group.id !== item.id,
+    );
 
-  await connection.write();
+    await connection.write();
+  }
 }
