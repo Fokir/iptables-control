@@ -1,7 +1,7 @@
-import { IptablesStrategyInterface } from "@/iptables/interfaces/iptables-strategy.interface";
-import { IptablesDatabaseGroupInterface } from "@/iptables/interfaces/iptables-database-group.interface";
-import { exec } from "child_process";
-import { promisify } from "util";
+import {IptablesStrategyInterface} from "@/iptables/interfaces/iptables-strategy.interface";
+import {IptablesDatabaseGroupInterface} from "@/iptables/interfaces/iptables-database-group.interface";
+import {exec} from "child_process";
+import {promisify} from "util";
 
 const execPromise = promisify(exec);
 
@@ -15,19 +15,21 @@ export class UnixStrategy implements IptablesStrategyInterface {
     for (const port of group.ports) {
       for (const protocol of port.protocols) {
         await this.execPreRouting(
-          group.targetIp,
-          group.destinationIp,
-          protocol,
-          port.value,
-          true,
+            group.targetIp,
+            group.destinationIp,
+            protocol,
+            port.value,
+            port.valueTarget,
+            true,
         );
 
         await this.execPostRouting(
-          group.destinationIp,
-          group.targetReverseIp,
-          protocol,
-          port.value,
-          true,
+            group.destinationIp,
+            group.targetReverseIp,
+            protocol,
+            port.value,
+            port.valueTarget,
+            true,
         );
       }
     }
@@ -42,45 +44,49 @@ export class UnixStrategy implements IptablesStrategyInterface {
     for (const port of group.ports) {
       for (const protocol of port.protocols) {
         await this.execPreRouting(
-          group.targetIp,
-          group.destinationIp,
-          protocol,
-          port.value,
-          false,
+            group.targetIp,
+            group.destinationIp,
+            protocol,
+            port.value,
+            port.valueTarget,
+            false,
         );
 
         await this.execPostRouting(
-          group.destinationIp,
-          group.targetReverseIp,
-          protocol,
-          port.value,
-          false,
+            group.destinationIp,
+            group.targetReverseIp,
+            protocol,
+            port.value,
+            port.valueTarget,
+            false,
         );
       }
     }
   }
 
   private async execPreRouting(
-    targetIp: string,
-    destinationIp: string,
-    protocol: "udp" | "tcp",
-    port: number,
-    append: boolean,
+      targetIp: string,
+      destinationIp: string,
+      protocol: "udp" | "tcp",
+      port: number,
+      portTarget: number,
+      append: boolean,
   ): Promise<void> {
     await execPromise(
-      `iptables -${append ? "A" : "D"} PREROUTING -t nat -d ${targetIp} -p ${protocol} --dport ${port} -j DNAT --to-dest ${destinationIp}:${port}`,
+        `iptables -${append ? "A" : "D"} PREROUTING -t nat -d ${targetIp} -p ${protocol} --dport ${port} -j DNAT --to-dest ${destinationIp}:${portTarget}`,
     );
   }
 
   private async execPostRouting(
-    targetIp: string,
-    destinationIp: string,
-    protocol: "udp" | "tcp",
-    port: number,
-    append: boolean,
+      targetIp: string,
+      destinationIp: string,
+      protocol: "udp" | "tcp",
+      port: number,
+      portTarget: number,
+      append: boolean,
   ): Promise<void> {
     await execPromise(
-      `iptables -${append ? "A" : "D"} POSTROUTING -t nat -d ${targetIp} -p ${protocol} --dport ${port} -j SNAT --to-source ${destinationIp}`,
+        `iptables -${append ? "A" : "D"} POSTROUTING -t nat -d ${targetIp} -p ${protocol} --dport ${portTarget} -j SNAT --to-source ${destinationIp}`,
     );
   }
 }

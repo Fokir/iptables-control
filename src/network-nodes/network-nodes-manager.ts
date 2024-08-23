@@ -2,6 +2,7 @@
 
 import {JSONFilePreset} from "lowdb/node";
 import {Low} from "lowdb";
+import {resolve} from "path";
 import {NetworkNodesDatabaseInterface} from "@/network-nodes/interfaces/network-nodes-database.interface";
 import {NetworkNodeItemDatabaseInterface} from "@/network-nodes/interfaces/network-node-item-database.interface";
 
@@ -9,7 +10,7 @@ async function getDatabaseConnection(): Promise<
     Low<NetworkNodesDatabaseInterface>
 > {
     const connection = await JSONFilePreset<NetworkNodesDatabaseInterface>(
-        "database/network-nodes.json",
+        resolve(process.cwd(), 'database/network-nodes.json'),
         {
             nodes: [],
         },

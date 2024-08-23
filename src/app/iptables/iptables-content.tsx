@@ -108,7 +108,7 @@ export default function IptablesContent({ groups, nodes }: IptablesCardProps) {
                 <TableCell>
                   {group.ports.map((port) => (
                     <div key={port.id} className="text-xs">
-                      {port.value}/{port.protocols.join(", ")}
+                      {port.value}:{port.valueTarget ?? port.value} <span className="text-yellow-300">[{port.protocols.join(", ")}]</span>
                     </div>
                   ))}
                 </TableCell>
