@@ -19,7 +19,7 @@ export class UnixStrategy implements IptablesStrategyInterface {
             group.destinationIp,
             protocol,
             port.value,
-            port.valueTarget,
+            port.valueTarget ?? port.value,
             true,
         );
 
@@ -28,7 +28,7 @@ export class UnixStrategy implements IptablesStrategyInterface {
             group.targetReverseIp,
             protocol,
             port.value,
-            port.valueTarget,
+            port.valueTarget ?? port.value,
             true,
         );
       }
@@ -48,7 +48,7 @@ export class UnixStrategy implements IptablesStrategyInterface {
             group.destinationIp,
             protocol,
             port.value,
-            port.valueTarget,
+            port.valueTarget ?? port.value,
             false,
         );
 
@@ -57,7 +57,7 @@ export class UnixStrategy implements IptablesStrategyInterface {
             group.targetReverseIp,
             protocol,
             port.value,
-            port.valueTarget,
+            port.valueTarget ?? port.value,
             false,
         );
       }
