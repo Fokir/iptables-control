@@ -3,7 +3,7 @@
 import { IptablesDatabaseInterface } from "@/iptables/interfaces/iptables-database.interface";
 import { IptablesDatabaseGroupInterface } from "@/iptables/interfaces/iptables-database-group.interface";
 import { getDatabaseConnection } from "@/iptables/iptables-database";
-import { execAppendGroup, execRemoveGroup } from "@/iptables/iptables-exec";
+import { execAppendGroup, execRemoveGroup, saveRules } from "@/iptables/iptables-exec";
 
 export async function getIptablesGroups(): Promise<
   IptablesDatabaseInterface["groups"]
@@ -24,7 +24,10 @@ export async function addIptablesGroup(
 
   await connection.write();
 
-  if (group.enabled) await execAppendGroup(group);
+  if (group.enabled) {
+    await execAppendGroup(group);
+    await saveRules();
+  }
 }
 
 export async function updateIptablesGroup(
@@ -44,6 +47,7 @@ export async function updateIptablesGroup(
   await connection.write();
 
   if (group.enabled) await execAppendGroup(group);
+  await saveRules();
 }
 
 export async function updateOrCreateGroup(
@@ -79,5 +83,6 @@ export async function deleteGroup(
     );
 
     await connection.write();
+    await saveRules();
   }
 }

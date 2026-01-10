@@ -11,4 +11,17 @@ export class DarwinStrategy implements IptablesStrategyInterface {
   ): Promise<void> {
     console.log('remove group rule', group);
   }
+
+  async syncGroupRules(group: IptablesDatabaseGroupInterface): Promise<void> {
+    console.log('sync group rule', group);
+  }
+
+  async scanSystemRules(): Promise<IptablesDatabaseGroupInterface[]> {
+    console.log('scan system rules (not implemented for Darwin)');
+    return [];
+  }
+
+  async saveRules(): Promise<void> {
+    console.log('save rules (not implemented for Darwin)');
+  }
 }

@@ -22,3 +22,15 @@ export async function execAppendGroup(group: IptablesDatabaseGroupInterface) {
 export async function execRemoveGroup(group: IptablesDatabaseGroupInterface) {
     await strategyIptables.removeGroupRules(group);
 }
+
+export async function execSyncGroup(group: IptablesDatabaseGroupInterface) {
+    await strategyIptables.syncGroupRules(group);
+}
+
+export async function scanSystemRules() {
+    return strategyIptables.scanSystemRules();
+}
+
+export async function saveRules() {
+    await strategyIptables.saveRules();
+}
