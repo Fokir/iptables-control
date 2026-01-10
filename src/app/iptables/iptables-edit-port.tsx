@@ -25,7 +25,7 @@ export default function IptablesEditPort({
         valueTarget: portTarget ?? port,
         protocols: [...protocols],
       });
-  }, [port, portTarget, protocols]);
+  }, [onChange, port, portProps.id, portTarget, protocols]);
 
   function onDeleteHandler(): void {
     if (typeof onDelete === "function") onDelete();
