@@ -9,6 +9,10 @@ export async function register() {
     const connection = await getDatabaseConnection();
     await connection.read();
 
+    for (const group of connection.data.groups) {
+      await execSyncGroup(group);
+    }
+
     const systemRules = await scanSystemRules();
     let hasChanges = false;
 
@@ -36,10 +40,6 @@ export async function register() {
 
     if (hasChanges) {
       await connection.write();
-    }
-
-    for (const group of connection.data.groups) {
-      await execSyncGroup(group);
     }
 
     if (hasChanges) {
