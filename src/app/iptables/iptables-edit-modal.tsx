@@ -19,6 +19,7 @@ import {NetworkNodesDatabaseInterface} from "@/network-nodes/interfaces/network-
 import IptablesEditPort from "@/app/iptables/iptables-edit-port";
 import {updateOrCreateGroup} from "@/iptables/iptables-manager";
 import {IptablesDatabasePortInterface} from "@/iptables/interfaces/iptables-database-port.interface";
+import {generateId} from "@/utils/generate-id";
 
 export type IptablesEditCardProps = {
   group: IptablesDatabaseGroupInterface;
@@ -85,7 +86,7 @@ export default function IptablesEditModal({
     setPorts((ports) => [
       ...ports,
       {
-        id: new Date().valueOf().toString(),
+        id: generateId(),
         protocols: ["udp", "tcp"],
         value: 0,
         valueTarget: 0,

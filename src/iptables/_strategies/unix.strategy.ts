@@ -193,9 +193,13 @@ export class UnixStrategy implements IptablesStrategyInterface {
       portTarget: number,
       append: boolean,
   ): Promise<void> {
-    await execPromise(
-        `iptables -${append ? "A" : "D"} PREROUTING -t nat -d ${targetIp} -p ${protocol} --dport ${port} -j DNAT --to-dest ${destinationIp}:${portTarget}`,
-    );
+    const command = `iptables -${append ? "A" : "D"} PREROUTING -t nat -d ${targetIp} -p ${protocol} --dport ${port} -j DNAT --to-dest ${destinationIp}:${portTarget}`;
+    try {
+      await execPromise(command);
+    } catch (error) {
+      console.error(`Failed to execute PREROUTING command: ${command}`, error);
+      throw error;
+    }
   }
 
   private async execPostRouting(
@@ -206,9 +210,13 @@ export class UnixStrategy implements IptablesStrategyInterface {
       portTarget: number,
       append: boolean,
   ): Promise<void> {
-    await execPromise(
-        `iptables -${append ? "A" : "D"} POSTROUTING -t nat -d ${targetIp} -p ${protocol} --dport ${portTarget} -j SNAT --to-source ${destinationIp}`,
-    );
+    const command = `iptables -${append ? "A" : "D"} POSTROUTING -t nat -d ${targetIp} -p ${protocol} --dport ${portTarget} -j SNAT --to-source ${destinationIp}`;
+    try {
+      await execPromise(command);
+    } catch (error) {
+      console.error(`Failed to execute POSTROUTING command: ${command}`, error);
+      throw error;
+    }
   }
 
   async scanSystemRules(): Promise<IptablesDatabaseGroupInterface[]> {

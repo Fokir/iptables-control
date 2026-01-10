@@ -10,14 +10,31 @@ export async function middleware(request: NextRequest) {
   const url = request.nextUrl;
 
   if (basicAuth) {
-    const authValue = basicAuth.split(" ")[1];
-    const [user, pwd] = atob(authValue).split(":");
+    try {
+      const parts = basicAuth.split(" ");
+      if (parts.length !== 2 || parts[0] !== "Basic") {
+        throw new Error("Invalid auth format");
+      }
 
-    const validUser = process.env.BASIC_AUTH_USER;
-    const validPassWord = process.env.BASIC_AUTH_PASSWORD;
+      const authValue = parts[1];
+      const decoded = atob(authValue);
+      const colonIndex = decoded.indexOf(":");
 
-    if (user === validUser && pwd === validPassWord) {
-      return NextResponse.next();
+      if (colonIndex === -1) {
+        throw new Error("Invalid credentials format");
+      }
+
+      const user = decoded.substring(0, colonIndex);
+      const pwd = decoded.substring(colonIndex + 1);
+
+      const validUser = process.env.BASIC_AUTH_USER;
+      const validPassWord = process.env.BASIC_AUTH_PASSWORD;
+
+      if (validUser && validPassWord && user === validUser && pwd === validPassWord) {
+        return NextResponse.next();
+      }
+    } catch {
+      // Invalid auth header format, fall through to auth page
     }
   }
 

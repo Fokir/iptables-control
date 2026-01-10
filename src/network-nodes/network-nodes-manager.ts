@@ -36,8 +36,9 @@ export async function addNetworkNode(
 ): Promise<void> {
     const connection = await getDatabaseConnection();
 
-    await deleteNetworkNode(node);
-
+    connection.data.nodes = connection.data.nodes.filter(
+        (item) => item.ip !== node.ip,
+    );
     connection.data.nodes.push(node);
 
     await connection.write();

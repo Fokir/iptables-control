@@ -72,14 +72,14 @@ export async function deleteGroup(
   const connection = await getDatabaseConnection();
 
   const index = connection.data.groups.findIndex(
-    (item) => group.id !== item.id,
+    (item) => item.id === group.id,
   );
 
   if (index > -1) {
     await execRemoveGroup(connection.data.groups[index]);
 
     connection.data.groups = connection.data.groups.filter(
-      (item) => group.id !== item.id,
+      (item) => item.id !== group.id,
     );
 
     await connection.write();

@@ -18,6 +18,7 @@ import { TrashIconComponent } from "@/app/components/trash-icon.component";
 import { EditIconComponent } from "@/app/components/edit-icon.component";
 import { deleteGroup } from "@/iptables/iptables-manager";
 import { useRouter } from "next/navigation";
+import { generateId } from "@/utils/generate-id";
 
 export type IptablesCardProps = {
   groups: IptablesDatabaseInterface["groups"];
@@ -25,7 +26,7 @@ export type IptablesCardProps = {
 };
 
 const getDefaultGroupValue: () => IptablesDatabaseGroupInterface = () => ({
-  id: new Date().valueOf().toString(),
+  id: generateId(),
   name: "",
   enabled: true,
   targetIp: "",
