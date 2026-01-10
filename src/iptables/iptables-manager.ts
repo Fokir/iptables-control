@@ -39,7 +39,15 @@ export async function updateIptablesGroup(
   );
 
   if (index > -1) {
-    await execRemoveGroup(connection.data.groups[index]);
+    const groupInDb = connection.data.groups[index];
+
+    if(groupInDb.enabled) {
+      try {
+          await execRemoveGroup(connection.data.groups[index]);
+      } catch (error) {
+          console.error(error);
+      }
+    }
 
     connection.data.groups[index] = group;
   }
@@ -47,6 +55,7 @@ export async function updateIptablesGroup(
   await connection.write();
 
   if (group.enabled) await execAppendGroup(group);
+
   await saveRules();
 }
 
@@ -76,7 +85,14 @@ export async function deleteGroup(
   );
 
   if (index > -1) {
-    await execRemoveGroup(connection.data.groups[index]);
+    const groupInDb = connection.data.groups[index];
+    if (groupInDb.enabled) {
+      try {
+          await execRemoveGroup(connection.data.groups[index]);
+      } catch (error) {
+          console.error(error);
+      }
+    }
 
     connection.data.groups = connection.data.groups.filter(
       (item) => item.id !== group.id,

@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "docker:build": "docker build -t system-control-test .",
+    "docker:test": "bash test-iptables.sh",
+    "docker:run": "bash run-test-container.sh",
+    "docker:check": "bash check-iptables.sh"
   },
   "dependencies": {
     "@nextui-org/react": "^2.2.10",

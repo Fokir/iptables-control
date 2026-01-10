@@ -1,0 +1,14 @@
+{
+  "nodes": [
+    {
+      "id": "test-node-1",
+      "name": "Test Server 1",
+      "ip": "192.168.1.50"
+    },
+    {
+      "id": "test-node-2",
+      "name": "Test Server 2",
+      "ip": "192.168.1.10"
+    }
+  ]
+}
