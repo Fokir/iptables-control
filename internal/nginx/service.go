@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"golang.org/x/crypto/bcrypt"
+
 	"github.com/sokol/system-control/internal/pkg/validate"
 )
 
@@ -37,12 +39,17 @@ func (s *Service) Create(req CreateDomainRequest) (*Domain, error) {
 	if err := validate.Port(req.UpstreamPort); err != nil {
 		return nil, fmt.Errorf("upstreamPort: %w", err)
 	}
+	if err := validateBasicAuth(req.BasicAuthUser, req.BasicAuthPassword); err != nil {
+		return nil, err
+	}
 
 	domain := &Domain{
-		Domain:       req.Domain,
-		UpstreamIP:   req.UpstreamIP,
-		UpstreamPort: req.UpstreamPort,
-		Enabled:      true,
+		Domain:            req.Domain,
+		UpstreamIP:        req.UpstreamIP,
+		UpstreamPort:      req.UpstreamPort,
+		BasicAuthUser:     req.BasicAuthUser,
+		BasicAuthPassword: req.BasicAuthPassword,
+		Enabled:           true,
 	}
 
 	if err := s.repo.Create(domain); err != nil {
@@ -66,6 +73,9 @@ func (s *Service) Update(id int64, req UpdateDomainRequest) (*Domain, error) {
 	if req.UpstreamPort == 0 {
 		req.UpstreamPort = 80
 	}
+	if err := validateBasicAuth(req.BasicAuthUser, req.BasicAuthPassword); err != nil {
+		return nil, err
+	}
 
 	domain, err := s.repo.GetByID(id)
 	if err != nil {
@@ -76,6 +86,8 @@ func (s *Service) Update(id int64, req UpdateDomainRequest) (*Domain, error) {
 	domain.Domain = req.Domain
 	domain.UpstreamIP = req.UpstreamIP
 	domain.UpstreamPort = req.UpstreamPort
+	domain.BasicAuthUser = req.BasicAuthUser
+	domain.BasicAuthPassword = req.BasicAuthPassword
 
 	if err := s.repo.Update(domain); err != nil {
 		return nil, fmt.Errorf("update domain: %w", err)
@@ -84,6 +96,7 @@ func (s *Service) Update(id int64, req UpdateDomainRequest) (*Domain, error) {
 	// Remove old config if domain name changed
 	if oldDomain != domain.Domain {
 		s.removeConfig(oldDomain)
+		s.removeHtpasswd(oldDomain)
 	}
 
 	if domain.Enabled {
@@ -102,6 +115,7 @@ func (s *Service) Delete(id int64) error {
 	}
 
 	s.removeConfig(domain.Domain)
+	s.removeHtpasswd(domain.Domain)
 	s.reloadNginx()
 
 	return s.repo.Delete(id)
@@ -124,6 +138,7 @@ func (s *Service) SetEnabled(id int64, enabled bool) (*Domain, error) {
 		}
 	} else {
 		s.removeConfig(domain.Domain)
+		s.removeHtpasswd(domain.Domain)
 		s.reloadNginx()
 	}
 
@@ -155,13 +170,29 @@ func (s *Service) configPath(domain string) string {
 	return filepath.Join(s.sitesDir, fmt.Sprintf("sc_%s.conf", domain))
 }
 
+func (s *Service) htpasswdPath(domain string) string {
+	return filepath.Join(s.sitesDir, fmt.Sprintf("sc_%s.htpasswd", domain))
+}
+
 func (s *Service) writeAndReload(domain *Domain) error {
 	if runtime.GOOS != "linux" {
 		slog.Warn("nginx config write skipped on non-Linux", "domain", domain.Domain)
 		return nil
 	}
 
-	content, err := renderConfig(domain)
+	hasAuth := domain.BasicAuthUser != "" && domain.BasicAuthPassword != ""
+
+	htpasswdFile := s.htpasswdPath(domain.Domain)
+	if hasAuth {
+		if err := s.writeHtpasswd(domain); err != nil {
+			return fmt.Errorf("write htpasswd: %w", err)
+		}
+	} else {
+		s.removeHtpasswd(domain.Domain)
+		htpasswdFile = ""
+	}
+
+	content, err := renderConfig(domain, htpasswdFile)
 	if err != nil {
 		return fmt.Errorf("render config: %w", err)
 	}
@@ -175,6 +206,9 @@ func (s *Service) writeAndReload(domain *Domain) error {
 	if err := exec.Command("nginx", "-t").Run(); err != nil {
 		// Rollback: remove bad config
 		os.Remove(path)
+		if hasAuth {
+			s.removeHtpasswd(domain.Domain)
+		}
 		return fmt.Errorf("nginx config test failed: %w", err)
 	}
 
@@ -182,8 +216,21 @@ func (s *Service) writeAndReload(domain *Domain) error {
 	return nil
 }
 
+func (s *Service) writeHtpasswd(domain *Domain) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(domain.BasicAuthPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	line := fmt.Sprintf("%s:{CRYPT}%s\n", domain.BasicAuthUser, string(hash))
+	return os.WriteFile(s.htpasswdPath(domain.Domain), []byte(line), 0644)
+}
+
 func (s *Service) removeConfig(domain string) {
 	os.Remove(s.configPath(domain))
+}
+
+func (s *Service) removeHtpasswd(domain string) {
+	os.Remove(s.htpasswdPath(domain))
 }
 
 func (s *Service) reloadNginx() {
@@ -193,4 +240,11 @@ func (s *Service) reloadNginx() {
 	if err := exec.Command("systemctl", "reload", "nginx").Run(); err != nil {
 		slog.Error("failed to reload nginx", "error", err)
 	}
+}
+
+func validateBasicAuth(user, password string) error {
+	if (user == "") != (password == "") {
+		return fmt.Errorf("basic auth requires both user and password, or neither")
+	}
+	return nil
 }

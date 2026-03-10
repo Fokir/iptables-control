@@ -50,6 +50,8 @@ export interface NginxDomain {
   upstreamPort: number
   sslEnabled: boolean
   enabled: boolean
+  basicAuthUser: string
+  basicAuthPassword: string
   createdAt: string
   updatedAt: string
 }

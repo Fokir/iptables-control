@@ -11,6 +11,10 @@ server {
     server_name {{.Domain}};
 
     location / {
+{{- if .HasBasicAuth}}
+        auth_basic "Restricted";
+        auth_basic_user_file {{.HtpasswdPath}};
+{{- end}}
         proxy_pass http://{{.UpstreamIP}}:{{.UpstreamPort}};
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -25,9 +29,24 @@ server {
 
 var confTmpl = template.Must(template.New("nginx").Parse(nginxConfTemplate))
 
-func renderConfig(d *Domain) ([]byte, error) {
+type configData struct {
+	Domain       string
+	UpstreamIP   string
+	UpstreamPort int
+	HasBasicAuth bool
+	HtpasswdPath string
+}
+
+func renderConfig(d *Domain, htpasswdPath string) ([]byte, error) {
+	data := configData{
+		Domain:       d.Domain,
+		UpstreamIP:   d.UpstreamIP,
+		UpstreamPort: d.UpstreamPort,
+		HasBasicAuth: d.BasicAuthUser != "" && d.BasicAuthPassword != "",
+		HtpasswdPath: htpasswdPath,
+	}
 	var buf bytes.Buffer
-	if err := confTmpl.Execute(&buf, d); err != nil {
+	if err := confTmpl.Execute(&buf, data); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil

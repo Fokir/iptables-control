@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Shield, ShieldOff } from 'lucide-react'
+import { Plus, Trash2, Shield, ShieldOff, Lock } from 'lucide-react'
 import { api } from '../api/client'
 import type { NginxDomain } from '../types'
 import { Button } from '../components/ui/Button'
@@ -15,6 +15,8 @@ export function NginxDomainsPage() {
   const [domain, setDomain] = useState('')
   const [upstreamIp, setUpstreamIp] = useState('')
   const [upstreamPort, setUpstreamPort] = useState('80')
+  const [basicAuthUser, setBasicAuthUser] = useState('')
+  const [basicAuthPassword, setBasicAuthPassword] = useState('')
   const [sslEmail, setSslEmail] = useState('')
   const [sslDomainId, setSslDomainId] = useState<number | null>(null)
 
@@ -24,13 +26,21 @@ export function NginxDomainsPage() {
   })
 
   const createMut = useMutation({
-    mutationFn: () => api.post('/api/nginx-domains', { domain, upstreamIp, upstreamPort: +upstreamPort }),
+    mutationFn: () => api.post('/api/nginx-domains', {
+      domain,
+      upstreamIp,
+      upstreamPort: +upstreamPort,
+      basicAuthUser: basicAuthUser || undefined,
+      basicAuthPassword: basicAuthPassword || undefined,
+    }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['nginx-domains'] })
       setShowForm(false)
       setDomain('')
       setUpstreamIp('')
       setUpstreamPort('80')
+      setBasicAuthUser('')
+      setBasicAuthPassword('')
     },
   })
 
@@ -76,6 +86,7 @@ export function NginxDomainsPage() {
                 <th className="text-left p-3 font-medium">Status</th>
                 <th className="text-left p-3 font-medium">Domain</th>
                 <th className="text-left p-3 font-medium">Upstream</th>
+                <th className="text-left p-3 font-medium">Auth</th>
                 <th className="text-left p-3 font-medium">SSL</th>
                 <th className="p-3 w-24"></th>
               </tr>
@@ -88,6 +99,13 @@ export function NginxDomainsPage() {
                   </td>
                   <td className="p-3 text-slate-200 font-mono">{d.domain}</td>
                   <td className="p-3 text-slate-300 font-mono">{d.upstreamIp}:{d.upstreamPort}</td>
+                  <td className="p-3">
+                    {d.basicAuthUser ? (
+                      <span className="text-blue-400 flex items-center gap-1"><Lock size={14} /> {d.basicAuthUser}</span>
+                    ) : (
+                      <span className="text-slate-500">-</span>
+                    )}
+                  </td>
                   <td className="p-3">
                     {d.sslEnabled ? (
                       <span className="text-green-400 flex items-center gap-1"><Shield size={14} /> Active</span>
@@ -117,6 +135,13 @@ export function NginxDomainsPage() {
           <Input label="Domain" placeholder="example.com" value={domain} onChange={e => setDomain(e.target.value)} required />
           <IpInput label="Upstream IP" placeholder="10.7.0.3" value={upstreamIp} onChange={setUpstreamIp} required />
           <Input label="Upstream Port" type="number" value={upstreamPort} onChange={e => setUpstreamPort(e.target.value)} />
+          <div className="border-t border-slate-700 pt-4">
+            <p className="text-sm text-slate-400 mb-3">Basic Auth (optional)</p>
+            <div className="space-y-3">
+              <Input label="Username" placeholder="admin" value={basicAuthUser} onChange={e => setBasicAuthUser(e.target.value)} />
+              <Input label="Password" type="password" placeholder="password" value={basicAuthPassword} onChange={e => setBasicAuthPassword(e.target.value)} />
+            </div>
+          </div>
           {createMut.error && <p className="text-sm text-red-400">{createMut.error.message}</p>}
           <div className="flex justify-end gap-2">
             <Button variant="ghost" type="button" onClick={() => setShowForm(false)}>Cancel</Button>
