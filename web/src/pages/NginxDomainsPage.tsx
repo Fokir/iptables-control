@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Trash2, Shield, ShieldOff, Lock, Download, ExternalLink } from 'lucide-react'
 import { api } from '../api/client'
-import type { NginxDomain, ExternalNginxDomain } from '../types'
+import type { NginxDomain, ExternalNginxDomain, NetworkNode } from '../types'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { IpInput } from '../components/ui/IpInput'
@@ -25,6 +25,13 @@ export function NginxDomainsPage() {
     queryKey: ['nginx-domains'],
     queryFn: () => api.get<NginxDomain[]>('/api/nginx-domains'),
   })
+
+  const { data: nodes = [] } = useQuery({
+    queryKey: ['network-nodes'],
+    queryFn: () => api.get<NetworkNode[]>('/api/network-nodes'),
+  })
+
+  const ipOptions = nodes.map(n => ({ label: `${n.name} (${n.ip})`, value: n.ip }))
 
   const { data: externalDomains = [] } = useQuery({
     queryKey: ['nginx-domains-external'],
@@ -184,7 +191,22 @@ export function NginxDomainsPage() {
       <Modal open={showForm} onClose={() => setShowForm(false)} title="Add Domain">
         <form onSubmit={e => { e.preventDefault(); createMut.mutate() }} className="space-y-4">
           <Input label="Domain" placeholder="example.com" value={domain} onChange={e => setDomain(e.target.value)} required />
-          <IpInput label="Upstream IP" placeholder="10.7.0.3" value={upstreamIp} onChange={setUpstreamIp} required />
+          <div className="flex flex-col gap-1">
+            <label className="text-sm text-slate-400">Upstream IP</label>
+            <div className="flex gap-2">
+              <IpInput value={upstreamIp} onChange={setUpstreamIp} className="flex-1" placeholder="10.7.0.3" required />
+              {ipOptions.length > 0 && (
+                <select
+                  value=""
+                  onChange={e => { if (e.target.value) setUpstreamIp(e.target.value) }}
+                  className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-2 text-slate-100 text-sm"
+                >
+                  <option value="">Select node</option>
+                  {ipOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              )}
+            </div>
+          </div>
           <Input label="Upstream Port" type="number" value={upstreamPort} onChange={e => setUpstreamPort(e.target.value)} />
           <div className="border-t border-slate-700 pt-4">
             <p className="text-sm text-slate-400 mb-3">Basic Auth (optional)</p>
