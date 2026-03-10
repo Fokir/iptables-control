@@ -24,8 +24,8 @@ export interface CreateGroupRequest {
   name: string
   enabled: boolean
   targetIp: string
-  targetReverseIp: string
-  destinationIp: string
+  targetReverseIp?: string
+  destinationIp?: string
   ports: CreatePortRequest[]
 }
 

@@ -144,11 +144,15 @@ func validateGroup(name, targetIP, targetReverseIP, destinationIP string) error 
 	if err := validate.IP(targetIP); err != nil {
 		return fmt.Errorf("targetIp: %w", err)
 	}
-	if err := validate.IP(targetReverseIP); err != nil {
-		return fmt.Errorf("targetReverseIp: %w", err)
+	if targetReverseIP != "" {
+		if err := validate.IP(targetReverseIP); err != nil {
+			return fmt.Errorf("targetReverseIp: %w", err)
+		}
 	}
-	if err := validate.IP(destinationIP); err != nil {
-		return fmt.Errorf("destinationIp: %w", err)
+	if destinationIP != "" {
+		if err := validate.IP(destinationIP); err != nil {
+			return fmt.Errorf("destinationIp: %w", err)
+		}
 	}
 	return nil
 }

@@ -29,16 +29,16 @@ export function GroupCard({ group, onEdit, onDelete, onToggle }: Props) {
 
       <div className="grid grid-cols-3 gap-4 text-sm mb-3">
         <div>
-          <span className="text-slate-500">Destination IP</span>
-          <p className="text-slate-200 font-mono">{group.destinationIp}</p>
-        </div>
-        <div>
           <span className="text-slate-500">Target IP</span>
           <p className="text-slate-200 font-mono">{group.targetIp}</p>
         </div>
         <div>
+          <span className="text-slate-500">Destination IP</span>
+          <p className={`font-mono ${group.destinationIp ? 'text-slate-200' : 'text-slate-500 italic'}`}>{group.destinationIp || 'Any'}</p>
+        </div>
+        <div>
           <span className="text-slate-500">SNAT IP</span>
-          <p className="text-slate-200 font-mono">{group.targetReverseIp}</p>
+          <p className={`font-mono ${group.targetReverseIp ? 'text-slate-200' : 'text-slate-500 italic'}`}>{group.targetReverseIp || 'Masquerade'}</p>
         </div>
       </div>
 

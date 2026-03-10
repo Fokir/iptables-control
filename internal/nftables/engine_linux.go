@@ -52,13 +52,28 @@ func (e *Engine) Apply(groups []NatGroup) error {
 			continue
 		}
 
-		destIP := net.ParseIP(group.DestinationIP).To4()
 		targetIP := net.ParseIP(group.TargetIP).To4()
-		snatIP := net.ParseIP(group.TargetReverseIP).To4()
-
-		if destIP == nil || targetIP == nil || snatIP == nil {
-			slog.Error("invalid IP in group, skipping", "group", group.Name)
+		if targetIP == nil {
+			slog.Error("invalid target IP in group, skipping", "group", group.Name)
 			continue
+		}
+
+		var destIP net.IP
+		if group.DestinationIP != "" {
+			destIP = net.ParseIP(group.DestinationIP).To4()
+			if destIP == nil {
+				slog.Error("invalid destination IP in group, skipping", "group", group.Name)
+				continue
+			}
+		}
+
+		var snatIP net.IP
+		if group.TargetReverseIP != "" {
+			snatIP = net.ParseIP(group.TargetReverseIP).To4()
+			if snatIP == nil {
+				slog.Error("invalid SNAT IP in group, skipping", "group", group.Name)
+				continue
+			}
 		}
 
 		for _, port := range group.Ports {
@@ -81,18 +96,30 @@ func (e *Engine) Apply(groups []NatGroup) error {
 					Exprs: buildDNATExprs(destIP, p.proto, uint16(port.ExternalPort), targetIP, uint16(port.InternalPort)),
 				})
 
-				conn.AddRule(&nftables.Rule{
-					Table: table,
-					Chain: postrouting,
-					Exprs: buildSNATExprs(targetIP, p.proto, uint16(port.InternalPort), snatIP),
-				})
+				if snatIP != nil {
+					conn.AddRule(&nftables.Rule{
+						Table: table,
+						Chain: postrouting,
+						Exprs: buildSNATExprs(targetIP, p.proto, uint16(port.InternalPort), snatIP),
+					})
+				} else {
+					conn.AddRule(&nftables.Rule{
+						Table: table,
+						Chain: postrouting,
+						Exprs: buildMasqueradeExprs(targetIP, p.proto, uint16(port.InternalPort)),
+					})
+				}
 
+				snatDesc := "masquerade"
+				if snatIP != nil {
+					snatDesc = snatIP.String()
+				}
 				slog.Debug("added NAT rule",
 					"group", group.Name,
 					"proto", p.name,
-					"dest", fmt.Sprintf("%s:%d", destIP, port.ExternalPort),
+					"dest", fmt.Sprintf("%v:%d", destIP, port.ExternalPort),
 					"target", fmt.Sprintf("%s:%d", targetIP, port.InternalPort),
-					"snat", snatIP.String(),
+					"snat", snatDesc,
 				)
 			}
 		}
@@ -107,9 +134,17 @@ func (e *Engine) Apply(groups []NatGroup) error {
 }
 
 func buildDNATExprs(destIP net.IP, proto byte, dport uint16, targetIP net.IP, targetPort uint16) []expr.Any {
-	return []expr.Any{
-		&expr.Payload{DestRegister: 1, Base: expr.PayloadBaseNetworkHeader, Offset: 16, Len: 4},
-		&expr.Cmp{Op: expr.CmpOpEq, Register: 1, Data: destIP},
+	var exprs []expr.Any
+
+	// Match destination IP if specified, otherwise match any destination
+	if destIP != nil {
+		exprs = append(exprs,
+			&expr.Payload{DestRegister: 1, Base: expr.PayloadBaseNetworkHeader, Offset: 16, Len: 4},
+			&expr.Cmp{Op: expr.CmpOpEq, Register: 1, Data: destIP},
+		)
+	}
+
+	exprs = append(exprs,
 		&expr.Meta{Key: expr.MetaKeyL4PROTO, Register: 1},
 		&expr.Cmp{Op: expr.CmpOpEq, Register: 1, Data: []byte{proto}},
 		&expr.Payload{DestRegister: 1, Base: expr.PayloadBaseTransportHeader, Offset: 2, Len: 2},
@@ -122,7 +157,9 @@ func buildDNATExprs(destIP net.IP, proto byte, dport uint16, targetIP net.IP, ta
 			RegAddrMin:  1,
 			RegProtoMin: 2,
 		},
-	}
+	)
+
+	return exprs
 }
 
 func buildSNATExprs(targetIP net.IP, proto byte, dport uint16, snatIP net.IP) []expr.Any {
@@ -139,6 +176,18 @@ func buildSNATExprs(targetIP net.IP, proto byte, dport uint16, snatIP net.IP) []
 			Family:     unix.NFPROTO_IPV4,
 			RegAddrMin: 1,
 		},
+	}
+}
+
+func buildMasqueradeExprs(targetIP net.IP, proto byte, dport uint16) []expr.Any {
+	return []expr.Any{
+		&expr.Payload{DestRegister: 1, Base: expr.PayloadBaseNetworkHeader, Offset: 16, Len: 4},
+		&expr.Cmp{Op: expr.CmpOpEq, Register: 1, Data: targetIP},
+		&expr.Meta{Key: expr.MetaKeyL4PROTO, Register: 1},
+		&expr.Cmp{Op: expr.CmpOpEq, Register: 1, Data: []byte{proto}},
+		&expr.Payload{DestRegister: 1, Base: expr.PayloadBaseTransportHeader, Offset: 2, Len: 2},
+		&expr.Cmp{Op: expr.CmpOpEq, Register: 1, Data: binaryPort(dport)},
+		&expr.Masq{},
 	}
 }
 

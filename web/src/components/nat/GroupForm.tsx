@@ -51,9 +51,9 @@ export function GroupForm({ group, nodes, saving, error, onSave, onCancel }: Pro
         <span className="text-sm text-slate-400">{enabled ? 'Enabled' : 'Disabled'}</span>
       </div>
 
-      <IpField label="Destination IP" value={destinationIp} onChange={setDestinationIp} options={ipOptions} />
-      <IpField label="Target IP" value={targetIp} onChange={setTargetIp} options={ipOptions} />
-      <IpField label="SNAT IP" value={targetReverseIp} onChange={setTargetReverseIp} options={ipOptions} />
+      <IpField label="Target IP" value={targetIp} onChange={setTargetIp} options={ipOptions} required />
+      <IpField label="Destination IP" value={destinationIp} onChange={setDestinationIp} options={ipOptions} placeholder="Any (match all incoming)" />
+      <IpField label="SNAT IP" value={targetReverseIp} onChange={setTargetReverseIp} options={ipOptions} placeholder="Auto (masquerade)" />
 
       <div>
         <div className="flex items-center justify-between mb-2">
@@ -110,16 +110,17 @@ export function GroupForm({ group, nodes, saving, error, onSave, onCancel }: Pro
   )
 }
 
-function IpField({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { label: string; value: string }[] }) {
+function IpField({ label, value, onChange, options, required, placeholder }: { label: string; value: string; onChange: (v: string) => void; options: { label: string; value: string }[]; required?: boolean; placeholder?: string }) {
   return (
     <div className="flex flex-col gap-1">
-      <label className="text-sm text-slate-400">{label}</label>
+      <label className="text-sm text-slate-400">{label}{!required && <span className="text-slate-600 ml-1">(optional)</span>}</label>
       <div className="flex gap-2">
         <input
           value={value}
           onChange={e => onChange(e.target.value)}
           className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 flex-1 focus:outline-none focus:border-blue-500"
-          placeholder="0.0.0.0"
+          placeholder={placeholder ?? "0.0.0.0"}
+          required={required}
         />
         {options.length > 0 && (
           <select
