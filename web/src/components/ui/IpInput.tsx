@@ -30,7 +30,7 @@ function maskIpv4(raw: string): string {
   const limited = parts.slice(0, 4)
 
   // Clamp each octet to 0-255 and limit to 3 digits
-  const clamped = limited.map((part, i) => {
+  const clamped = limited.map((part) => {
     if (part === '') return part
     // Remove leading zeros (but keep single "0")
     let num = part.replace(/^0+(?=\d)/, '')
