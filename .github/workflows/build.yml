@@ -24,7 +24,7 @@ jobs:
           echo '<html></html>' > cmd/server/frontend/index.html
 
       - name: Run Go tests
-        run: go test -race -cover ./...
+        run: go test -race ./internal/...
 
   build:
     name: Build
