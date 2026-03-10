@@ -156,11 +156,11 @@ log "Installed binary to $INSTALL_DIR/$APP_NAME"
 if [ ! -f "$CONFIG_DIR/.env" ]; then
     log "Creating configuration..."
 
-    read -p "Admin username [admin]: " ADMIN_USER
+    read -p "Admin username [admin]: " ADMIN_USER < /dev/tty
     ADMIN_USER=${ADMIN_USER:-admin}
 
     while true; do
-        read -sp "Admin password: " ADMIN_PASSWORD
+        read -sp "Admin password: " ADMIN_PASSWORD < /dev/tty
         echo
         if [ -n "$ADMIN_PASSWORD" ]; then
             break
@@ -168,7 +168,7 @@ if [ ! -f "$CONFIG_DIR/.env" ]; then
         warn "Password cannot be empty, try again"
     done
 
-    read -p "HTTP port [8080]: " PORT
+    read -p "HTTP port [8080]: " PORT < /dev/tty
     PORT=${PORT:-8080}
 
     cat > "$CONFIG_DIR/.env" <<EOF

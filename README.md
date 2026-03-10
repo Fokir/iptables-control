@@ -125,6 +125,20 @@ If already on the latest version, exits immediately with no changes.
 
 ---
 
+## Uninstall
+
+Completely removes System Control (binary, config, database, service, nginx config):
+
+```bash
+curl -sL https://raw.githubusercontent.com/Fokir/iptables-control/main/scripts/uninstall.sh | sudo bash
+```
+
+System packages (nginx, certbot, nftables, wireguard-tools) are **not** removed — delete them manually if no longer needed.
+
+After uninstalling, you can do a clean reinstall with the [install command](#quick-install).
+
+---
+
 ## Development
 
 ```bash
