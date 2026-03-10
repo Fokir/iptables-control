@@ -3,6 +3,7 @@ import { Plus, Trash2 } from 'lucide-react'
 import type { NatGroup, NetworkNode, CreateGroupRequest, CreatePortRequest } from '../../types'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
+import { IpInput } from '../ui/IpInput'
 import { Toggle } from '../ui/Toggle'
 
 interface Props {
@@ -115,10 +116,10 @@ function IpField({ label, value, onChange, options, required, placeholder }: { l
     <div className="flex flex-col gap-1">
       <label className="text-sm text-slate-400">{label}{!required && <span className="text-slate-600 ml-1">(optional)</span>}</label>
       <div className="flex gap-2">
-        <input
+        <IpInput
           value={value}
-          onChange={e => onChange(e.target.value)}
-          className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 flex-1 focus:outline-none focus:border-blue-500"
+          onChange={onChange}
+          className="flex-1"
           placeholder={placeholder ?? "0.0.0.0"}
           required={required}
         />

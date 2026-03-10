@@ -5,6 +5,7 @@ import { api } from '../api/client'
 import type { NetworkNode } from '../types'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
+import { IpInput } from '../components/ui/IpInput'
 
 export function NetworkNodesPage() {
   const queryClient = useQueryClient()
@@ -41,7 +42,7 @@ export function NetworkNodesPage() {
 
       <form onSubmit={handleSubmit} className="flex gap-3 mb-6">
         <Input placeholder="Node name" value={name} onChange={e => setName(e.target.value)} required />
-        <Input placeholder="IP address" value={ip} onChange={e => setIp(e.target.value)} required />
+        <IpInput placeholder="IP address" value={ip} onChange={setIp} required />
         <Button type="submit" loading={addMut.isPending} size="sm">
           <Plus size={16} className="mr-1" /> Add
         </Button>

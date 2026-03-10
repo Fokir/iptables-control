@@ -5,6 +5,7 @@ import { api } from '../api/client'
 import type { NginxDomain } from '../types'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
+import { IpInput } from '../components/ui/IpInput'
 import { Modal } from '../components/ui/Modal'
 import { Toggle } from '../components/ui/Toggle'
 
@@ -114,7 +115,7 @@ export function NginxDomainsPage() {
       <Modal open={showForm} onClose={() => setShowForm(false)} title="Add Domain">
         <form onSubmit={e => { e.preventDefault(); createMut.mutate() }} className="space-y-4">
           <Input label="Domain" placeholder="example.com" value={domain} onChange={e => setDomain(e.target.value)} required />
-          <Input label="Upstream IP" placeholder="10.7.0.3" value={upstreamIp} onChange={e => setUpstreamIp(e.target.value)} required />
+          <IpInput label="Upstream IP" placeholder="10.7.0.3" value={upstreamIp} onChange={setUpstreamIp} required />
           <Input label="Upstream Port" type="number" value={upstreamPort} onChange={e => setUpstreamPort(e.target.value)} />
           {createMut.error && <p className="text-sm text-red-400">{createMut.error.message}</p>}
           <div className="flex justify-end gap-2">
