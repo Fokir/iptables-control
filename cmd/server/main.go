@@ -28,6 +28,11 @@ var version = "dev"
 var frontendFS embed.FS
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "--version" {
+		fmt.Println(version)
+		os.Exit(0)
+	}
+
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo})))
 	slog.Info("starting system-control", "version", version)
 

@@ -11,11 +11,13 @@ SERVICE_FILE="/etc/systemd/system/system-control.service"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m'
 
 log() { echo -e "${GREEN}[+]${NC} $1"; }
 warn() { echo -e "${YELLOW}[!]${NC} $1"; }
 error() { echo -e "${RED}[x]${NC} $1"; exit 1; }
+info() { echo -e "${BLUE}[i]${NC} $1"; }
 
 # ─────────────────────────────────────────────
 # Checks
@@ -36,59 +38,93 @@ case "$ARCH" in
     *)       error "Unsupported architecture: $ARCH" ;;
 esac
 
-log "OS: $(. /etc/os-release && echo "$PRETTY_NAME"), Arch: $ARCH ($BINARY_ARCH)"
+# Detect if this is an upgrade
+IS_UPGRADE=false
+if [ -f "$INSTALL_DIR/$APP_NAME" ] && [ -f "$CONFIG_DIR/.env" ] && [ -f "$SERVICE_FILE" ]; then
+    IS_UPGRADE=true
+fi
 
-# ─────────────────────────────────────────────
-# Install system dependencies
-# ─────────────────────────────────────────────
-
-log "Updating package lists..."
-apt-get update -qq
-
-log "Installing dependencies..."
-DEPS=(
-    nginx                   # reverse proxy & domain management
-    certbot                 # Let's Encrypt SSL certificates
-    python3-certbot-nginx   # certbot nginx plugin
-    nftables                # packet filtering (replaces iptables)
-    curl                    # downloading binary
-    wireguard-tools         # WireGuard VPN (if not already present)
-)
-
-for pkg in "${DEPS[@]}"; do
-    if dpkg -s "$pkg" &>/dev/null; then
-        log "  $pkg — already installed"
-    else
-        log "  $pkg — installing..."
-        apt-get install -y -qq "$pkg" > /dev/null 2>&1
-    fi
-done
-
-# ─────────────────────────────────────────────
-# Enable IP forwarding (required for NAT)
-# ─────────────────────────────────────────────
-
-log "Enabling IP forwarding..."
-sysctl -w net.ipv4.ip_forward=1 > /dev/null
-if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.d/99-system-control.conf 2>/dev/null; then
-    echo "net.ipv4.ip_forward=1" > /etc/sysctl.d/99-system-control.conf
+if $IS_UPGRADE; then
+    info "Existing installation detected — upgrading"
+else
+    log "OS: $(. /etc/os-release && echo "$PRETTY_NAME"), Arch: $ARCH ($BINARY_ARCH)"
 fi
 
 # ─────────────────────────────────────────────
-# Enable and start nftables
+# Resolve latest version
 # ─────────────────────────────────────────────
 
-log "Enabling nftables..."
-systemctl enable nftables 2>/dev/null || true
-systemctl start nftables 2>/dev/null || true
+log "Checking latest release..."
+
+LATEST_TAG=$(curl -sI "https://github.com/$REPO/releases/latest" | grep -i '^location:' | sed 's|.*/||' | tr -d '\r\n')
+
+if [ -z "$LATEST_TAG" ]; then
+    error "Could not determine latest release. Check https://github.com/$REPO/releases"
+fi
+
+# Check if already up to date
+if $IS_UPGRADE; then
+    CURRENT_VERSION=$("$INSTALL_DIR/$APP_NAME" --version 2>/dev/null || echo "unknown")
+    if [ "$CURRENT_VERSION" = "$LATEST_TAG" ]; then
+        log "Already up to date ($LATEST_TAG)"
+        exit 0
+    fi
+    info "Current: ${CURRENT_VERSION:-unknown} → Latest: $LATEST_TAG"
+fi
 
 # ─────────────────────────────────────────────
-# Remove default nginx site (conflicts with default_server)
+# Install system dependencies (first install only)
 # ─────────────────────────────────────────────
 
-if [ -f /etc/nginx/sites-enabled/default ]; then
-    log "Removing default nginx site..."
-    rm -f /etc/nginx/sites-enabled/default
+if ! $IS_UPGRADE; then
+    log "Updating package lists..."
+    apt-get update -qq
+
+    log "Installing dependencies..."
+    DEPS=(
+        nginx                   # reverse proxy & domain management
+        certbot                 # Let's Encrypt SSL certificates
+        python3-certbot-nginx   # certbot nginx plugin
+        nftables                # packet filtering (replaces iptables)
+        curl                    # downloading binary
+        wireguard-tools         # WireGuard VPN (if not already present)
+    )
+
+    for pkg in "${DEPS[@]}"; do
+        if dpkg -s "$pkg" &>/dev/null; then
+            log "  $pkg — already installed"
+        else
+            log "  $pkg — installing..."
+            apt-get install -y -qq "$pkg" > /dev/null 2>&1
+        fi
+    done
+
+    # ─────────────────────────────────────────────
+    # Enable IP forwarding (required for NAT)
+    # ─────────────────────────────────────────────
+
+    log "Enabling IP forwarding..."
+    sysctl -w net.ipv4.ip_forward=1 > /dev/null
+    if ! grep -q "net.ipv4.ip_forward=1" /etc/sysctl.d/99-system-control.conf 2>/dev/null; then
+        echo "net.ipv4.ip_forward=1" > /etc/sysctl.d/99-system-control.conf
+    fi
+
+    # ─────────────────────────────────────────────
+    # Enable and start nftables
+    # ─────────────────────────────────────────────
+
+    log "Enabling nftables..."
+    systemctl enable nftables 2>/dev/null || true
+    systemctl start nftables 2>/dev/null || true
+
+    # ─────────────────────────────────────────────
+    # Remove default nginx site (conflicts with default_server)
+    # ─────────────────────────────────────────────
+
+    if [ -f /etc/nginx/sites-enabled/default ]; then
+        log "Removing default nginx site..."
+        rm -f /etc/nginx/sites-enabled/default
+    fi
 fi
 
 # ─────────────────────────────────────────────
@@ -101,27 +137,20 @@ mkdir -p "$DATA_DIR" "$CONFIG_DIR"
 # Download binary
 # ─────────────────────────────────────────────
 
-log "Downloading latest release from github.com/$REPO..."
-
-LATEST_TAG=$(curl -sI "https://github.com/$REPO/releases/latest" | grep -i '^location:' | sed 's|.*/||' | tr -d '\r\n')
-
-if [ -z "$LATEST_TAG" ]; then
-    error "Could not determine latest release. Check https://github.com/$REPO/releases"
-fi
-
-log "Latest version: $LATEST_TAG"
+log "Downloading $LATEST_TAG..."
 
 DOWNLOAD_URL="https://github.com/$REPO/releases/download/${LATEST_TAG}/${APP_NAME}-linux-${BINARY_ARCH}"
 
-if ! curl -fsSL "$DOWNLOAD_URL" -o "$INSTALL_DIR/$APP_NAME"; then
+if ! curl -fsSL "$DOWNLOAD_URL" -o "$INSTALL_DIR/$APP_NAME.tmp"; then
     error "Download failed from $DOWNLOAD_URL"
 fi
 
+mv -f "$INSTALL_DIR/$APP_NAME.tmp" "$INSTALL_DIR/$APP_NAME"
 chmod +x "$INSTALL_DIR/$APP_NAME"
 log "Installed binary to $INSTALL_DIR/$APP_NAME"
 
 # ─────────────────────────────────────────────
-# Configuration
+# Configuration (first install only)
 # ─────────────────────────────────────────────
 
 if [ ! -f "$CONFIG_DIR/.env" ]; then
@@ -154,18 +183,18 @@ EOF
     chmod 600 "$CONFIG_DIR/.env"
     log "Configuration saved to $CONFIG_DIR/.env"
 else
-    warn "Configuration already exists at $CONFIG_DIR/.env, skipping"
     PORT=$(grep '^PORT=' "$CONFIG_DIR/.env" | cut -d= -f2)
     PORT=${PORT:-8080}
 fi
 
 # ─────────────────────────────────────────────
-# Systemd service
+# Systemd service (first install or update)
 # ─────────────────────────────────────────────
 
-log "Creating systemd service..."
+if [ ! -f "$SERVICE_FILE" ]; then
+    log "Creating systemd service..."
 
-cat > "$SERVICE_FILE" <<EOF
+    cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=System Control - Network Management
 After=network.target nginx.service nftables.service
@@ -190,17 +219,17 @@ CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
 WantedBy=multi-user.target
 EOF
 
-systemctl daemon-reload
-systemctl enable system-control
+    systemctl daemon-reload
+    systemctl enable system-control
+fi
 
-# Stop existing service if running (for upgrades)
+# Restart service
 systemctl stop system-control 2>/dev/null || true
 systemctl start system-control
-
 log "Service started"
 
 # ─────────────────────────────────────────────
-# Nginx reverse proxy for the panel itself
+# Nginx reverse proxy (first install only)
 # ─────────────────────────────────────────────
 
 NGINX_SC_CONF="/etc/nginx/sites-enabled/system-control-panel.conf"
@@ -234,8 +263,6 @@ EOF
     else
         warn "Nginx config test failed, please check manually"
     fi
-else
-    warn "Nginx config already exists, skipping"
 fi
 
 # ─────────────────────────────────────────────
@@ -245,9 +272,15 @@ fi
 IP_ADDR=$(hostname -I | awk '{print $1}')
 
 echo ""
-echo -e "${GREEN}══════════════════════════════════════════${NC}"
-echo -e "${GREEN} Installation complete!${NC}"
-echo -e "${GREEN}══════════════════════════════════════════${NC}"
+if $IS_UPGRADE; then
+    echo -e "${GREEN}══════════════════════════════════════════${NC}"
+    echo -e "${GREEN} Upgrade complete! ${LATEST_TAG}${NC}"
+    echo -e "${GREEN}══════════════════════════════════════════${NC}"
+else
+    echo -e "${GREEN}══════════════════════════════════════════${NC}"
+    echo -e "${GREEN} Installation complete! ${LATEST_TAG}${NC}"
+    echo -e "${GREEN}══════════════════════════════════════════${NC}"
+fi
 echo ""
 echo -e "  Access:    http://${IP_ADDR}"
 echo -e "  Config:    $CONFIG_DIR/.env"
@@ -256,5 +289,5 @@ echo -e "  Service:   systemctl status system-control"
 echo -e "  Logs:      journalctl -u system-control -f"
 echo ""
 echo -e "  ${YELLOW}To upgrade later:${NC}"
-echo -e "  curl -sL https://raw.githubusercontent.com/$REPO/master/scripts/install.sh | sudo bash"
+echo -e "  curl -sL https://raw.githubusercontent.com/$REPO/main/scripts/install.sh | sudo bash"
 echo ""
