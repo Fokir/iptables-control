@@ -45,10 +45,25 @@ func (s *Service) Create(req CreateDomainRequest) (*Domain, error) {
 		return nil, err
 	}
 
+	scheme := req.UpstreamScheme
+	if scheme == "" {
+		scheme = "http"
+	}
+	if scheme != "http" && scheme != "https" {
+		return nil, fmt.Errorf("upstreamScheme: must be http or https")
+	}
+
+	sslVerify := true
+	if req.UpstreamSSLVerify != nil {
+		sslVerify = *req.UpstreamSSLVerify
+	}
+
 	domain := &Domain{
 		Domain:            req.Domain,
 		UpstreamIP:        req.UpstreamIP,
 		UpstreamPort:      req.UpstreamPort,
+		UpstreamScheme:    scheme,
+		UpstreamSSLVerify: sslVerify,
 		BasicAuthUser:     req.BasicAuthUser,
 		BasicAuthPassword: req.BasicAuthPassword,
 		Enabled:           true,
@@ -84,10 +99,25 @@ func (s *Service) Update(id int64, req UpdateDomainRequest) (*Domain, error) {
 		return nil, fmt.Errorf("domain not found: %w", err)
 	}
 
+	scheme := req.UpstreamScheme
+	if scheme == "" {
+		scheme = "http"
+	}
+	if scheme != "http" && scheme != "https" {
+		return nil, fmt.Errorf("upstreamScheme: must be http or https")
+	}
+
+	sslVerify := domain.UpstreamSSLVerify
+	if req.UpstreamSSLVerify != nil {
+		sslVerify = *req.UpstreamSSLVerify
+	}
+
 	oldDomain := domain.Domain
 	domain.Domain = req.Domain
 	domain.UpstreamIP = req.UpstreamIP
 	domain.UpstreamPort = req.UpstreamPort
+	domain.UpstreamScheme = scheme
+	domain.UpstreamSSLVerify = sslVerify
 	domain.BasicAuthUser = req.BasicAuthUser
 	domain.BasicAuthPassword = req.BasicAuthPassword
 
@@ -336,11 +366,13 @@ func (s *Service) ImportExternal(filename string) (*Domain, error) {
 
 	// Create domain in DB
 	domain := &Domain{
-		Domain:       ext.Domain,
-		UpstreamIP:   ext.UpstreamIP,
-		UpstreamPort: ext.UpstreamPort,
-		SSLEnabled:   ext.SSLEnabled,
-		Enabled:      true,
+		Domain:            ext.Domain,
+		UpstreamIP:        ext.UpstreamIP,
+		UpstreamPort:      ext.UpstreamPort,
+		UpstreamScheme:    "http",
+		UpstreamSSLVerify: true,
+		SSLEnabled:        ext.SSLEnabled,
+		Enabled:           true,
 	}
 
 	if ext.UpstreamPort == 0 {

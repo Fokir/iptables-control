@@ -48,6 +48,8 @@ export interface NginxDomain {
   domain: string
   upstreamIp: string
   upstreamPort: number
+  upstreamScheme: string
+  upstreamSslVerify: boolean
   sslEnabled: boolean
   enabled: boolean
   basicAuthUser: string

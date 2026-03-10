@@ -11,7 +11,7 @@ func NewRepository(db *sql.DB) *Repository {
 }
 
 func (r *Repository) GetAll() ([]Domain, error) {
-	rows, err := r.db.Query("SELECT id, domain, upstream_ip, upstream_port, ssl_enabled, enabled, basic_auth_user, basic_auth_password, created_at, updated_at FROM nginx_domains ORDER BY domain")
+	rows, err := r.db.Query("SELECT id, domain, upstream_ip, upstream_port, upstream_scheme, upstream_ssl_verify, ssl_enabled, enabled, basic_auth_user, basic_auth_password, created_at, updated_at FROM nginx_domains ORDER BY domain")
 	if err != nil {
 		return nil, err
 	}
@@ -20,7 +20,7 @@ func (r *Repository) GetAll() ([]Domain, error) {
 	var domains []Domain
 	for rows.Next() {
 		var d Domain
-		if err := rows.Scan(&d.ID, &d.Domain, &d.UpstreamIP, &d.UpstreamPort, &d.SSLEnabled, &d.Enabled, &d.BasicAuthUser, &d.BasicAuthPassword, &d.CreatedAt, &d.UpdatedAt); err != nil {
+		if err := rows.Scan(&d.ID, &d.Domain, &d.UpstreamIP, &d.UpstreamPort, &d.UpstreamScheme, &d.UpstreamSSLVerify, &d.SSLEnabled, &d.Enabled, &d.BasicAuthUser, &d.BasicAuthPassword, &d.CreatedAt, &d.UpdatedAt); err != nil {
 			return nil, err
 		}
 		domains = append(domains, d)
@@ -34,9 +34,9 @@ func (r *Repository) GetAll() ([]Domain, error) {
 func (r *Repository) GetByID(id int64) (*Domain, error) {
 	var d Domain
 	err := r.db.QueryRow(
-		"SELECT id, domain, upstream_ip, upstream_port, ssl_enabled, enabled, basic_auth_user, basic_auth_password, created_at, updated_at FROM nginx_domains WHERE id = ?",
+		"SELECT id, domain, upstream_ip, upstream_port, upstream_scheme, upstream_ssl_verify, ssl_enabled, enabled, basic_auth_user, basic_auth_password, created_at, updated_at FROM nginx_domains WHERE id = ?",
 		id,
-	).Scan(&d.ID, &d.Domain, &d.UpstreamIP, &d.UpstreamPort, &d.SSLEnabled, &d.Enabled, &d.BasicAuthUser, &d.BasicAuthPassword, &d.CreatedAt, &d.UpdatedAt)
+	).Scan(&d.ID, &d.Domain, &d.UpstreamIP, &d.UpstreamPort, &d.UpstreamScheme, &d.UpstreamSSLVerify, &d.SSLEnabled, &d.Enabled, &d.BasicAuthUser, &d.BasicAuthPassword, &d.CreatedAt, &d.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -45,8 +45,8 @@ func (r *Repository) GetByID(id int64) (*Domain, error) {
 
 func (r *Repository) Create(d *Domain) error {
 	res, err := r.db.Exec(
-		"INSERT INTO nginx_domains (domain, upstream_ip, upstream_port, basic_auth_user, basic_auth_password) VALUES (?, ?, ?, ?, ?)",
-		d.Domain, d.UpstreamIP, d.UpstreamPort, d.BasicAuthUser, d.BasicAuthPassword,
+		"INSERT INTO nginx_domains (domain, upstream_ip, upstream_port, upstream_scheme, upstream_ssl_verify, basic_auth_user, basic_auth_password) VALUES (?, ?, ?, ?, ?, ?, ?)",
+		d.Domain, d.UpstreamIP, d.UpstreamPort, d.UpstreamScheme, d.UpstreamSSLVerify, d.BasicAuthUser, d.BasicAuthPassword,
 	)
 	if err != nil {
 		return err
@@ -57,8 +57,8 @@ func (r *Repository) Create(d *Domain) error {
 
 func (r *Repository) Update(d *Domain) error {
 	_, err := r.db.Exec(
-		"UPDATE nginx_domains SET domain = ?, upstream_ip = ?, upstream_port = ?, ssl_enabled = ?, enabled = ?, basic_auth_user = ?, basic_auth_password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
-		d.Domain, d.UpstreamIP, d.UpstreamPort, d.SSLEnabled, d.Enabled, d.BasicAuthUser, d.BasicAuthPassword, d.ID,
+		"UPDATE nginx_domains SET domain = ?, upstream_ip = ?, upstream_port = ?, upstream_scheme = ?, upstream_ssl_verify = ?, ssl_enabled = ?, enabled = ?, basic_auth_user = ?, basic_auth_password = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+		d.Domain, d.UpstreamIP, d.UpstreamPort, d.UpstreamScheme, d.UpstreamSSLVerify, d.SSLEnabled, d.Enabled, d.BasicAuthUser, d.BasicAuthPassword, d.ID,
 	)
 	return err
 }

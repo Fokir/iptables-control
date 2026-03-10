@@ -7,6 +7,8 @@ type Domain struct {
 	Domain            string    `json:"domain"`
 	UpstreamIP        string    `json:"upstreamIp"`
 	UpstreamPort      int       `json:"upstreamPort"`
+	UpstreamScheme    string    `json:"upstreamScheme"`
+	UpstreamSSLVerify bool      `json:"upstreamSslVerify"`
 	SSLEnabled        bool      `json:"sslEnabled"`
 	Enabled           bool      `json:"enabled"`
 	BasicAuthUser     string    `json:"basicAuthUser"`
@@ -19,6 +21,8 @@ type CreateDomainRequest struct {
 	Domain            string `json:"domain"`
 	UpstreamIP        string `json:"upstreamIp"`
 	UpstreamPort      int    `json:"upstreamPort"`
+	UpstreamScheme    string `json:"upstreamScheme"`
+	UpstreamSSLVerify *bool  `json:"upstreamSslVerify"`
 	BasicAuthUser     string `json:"basicAuthUser"`
 	BasicAuthPassword string `json:"basicAuthPassword"`
 }
@@ -27,6 +31,8 @@ type UpdateDomainRequest struct {
 	Domain            string `json:"domain"`
 	UpstreamIP        string `json:"upstreamIp"`
 	UpstreamPort      int    `json:"upstreamPort"`
+	UpstreamScheme    string `json:"upstreamScheme"`
+	UpstreamSSLVerify *bool  `json:"upstreamSslVerify"`
 	BasicAuthUser     string `json:"basicAuthUser"`
 	BasicAuthPassword string `json:"basicAuthPassword"`
 }

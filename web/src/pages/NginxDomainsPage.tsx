@@ -15,6 +15,8 @@ export function NginxDomainsPage() {
   const [domain, setDomain] = useState('')
   const [upstreamIp, setUpstreamIp] = useState('')
   const [upstreamPort, setUpstreamPort] = useState('80')
+  const [upstreamScheme, setUpstreamScheme] = useState('http')
+  const [upstreamSslVerify, setUpstreamSslVerify] = useState(true)
   const [basicAuthUser, setBasicAuthUser] = useState('')
   const [basicAuthPassword, setBasicAuthPassword] = useState('')
   const [sslEmail, setSslEmail] = useState('')
@@ -43,6 +45,8 @@ export function NginxDomainsPage() {
       domain,
       upstreamIp,
       upstreamPort: +upstreamPort,
+      upstreamScheme,
+      upstreamSslVerify,
       basicAuthUser: basicAuthUser || undefined,
       basicAuthPassword: basicAuthPassword || undefined,
     }),
@@ -52,6 +56,8 @@ export function NginxDomainsPage() {
       setDomain('')
       setUpstreamIp('')
       setUpstreamPort('80')
+      setUpstreamScheme('http')
+      setUpstreamSslVerify(true)
       setBasicAuthUser('')
       setBasicAuthPassword('')
     },
@@ -120,7 +126,7 @@ export function NginxDomainsPage() {
                     <Toggle checked={d.enabled} onChange={enabled => toggleMut.mutate({ id: d.id, enabled })} />
                   </td>
                   <td className="p-3 text-slate-200 font-mono">{d.domain}</td>
-                  <td className="p-3 text-slate-300 font-mono">{d.upstreamIp}:{d.upstreamPort}</td>
+                  <td className="p-3 text-slate-300 font-mono">{d.upstreamScheme || 'http'}://{d.upstreamIp}:{d.upstreamPort}</td>
                   <td className="p-3">
                     {d.basicAuthUser ? (
                       <span className="text-blue-400 flex items-center gap-1"><Lock size={14} /> {d.basicAuthUser}</span>
@@ -207,7 +213,31 @@ export function NginxDomainsPage() {
               )}
             </div>
           </div>
-          <Input label="Upstream Port" type="number" value={upstreamPort} onChange={e => setUpstreamPort(e.target.value)} />
+          <div className="flex gap-4">
+            <Input label="Upstream Port" type="number" value={upstreamPort} onChange={e => setUpstreamPort(e.target.value)} />
+            <div className="flex flex-col gap-1">
+              <label className="text-sm text-slate-400">Scheme</label>
+              <select
+                value={upstreamScheme}
+                onChange={e => setUpstreamScheme(e.target.value)}
+                className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm"
+              >
+                <option value="http">HTTP</option>
+                <option value="https">HTTPS</option>
+              </select>
+            </div>
+          </div>
+          {upstreamScheme === 'https' && (
+            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!upstreamSslVerify}
+                onChange={e => setUpstreamSslVerify(!e.target.checked)}
+                className="rounded border-slate-600 bg-slate-700 text-blue-500"
+              />
+              Skip upstream SSL certificate verification
+            </label>
+          )}
           <div className="border-t border-slate-700 pt-4">
             <p className="text-sm text-slate-400 mb-3">Basic Auth (optional)</p>
             <div className="space-y-3">

@@ -15,7 +15,10 @@ server {
         auth_basic "Restricted";
         auth_basic_user_file {{.HtpasswdPath}};
 {{- end}}
-        proxy_pass http://{{.UpstreamIP}}:{{.UpstreamPort}};
+        proxy_pass {{.UpstreamScheme}}://{{.UpstreamIP}}:{{.UpstreamPort}};
+{{- if not .UpstreamSSLVerify}}
+        proxy_ssl_verify off;
+{{- end}}
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -36,20 +39,28 @@ server {
 var confTmpl = template.Must(template.New("nginx").Parse(nginxConfTemplate))
 
 type configData struct {
-	Domain       string
-	UpstreamIP   string
-	UpstreamPort int
-	HasBasicAuth bool
-	HtpasswdPath string
+	Domain           string
+	UpstreamIP       string
+	UpstreamPort     int
+	UpstreamScheme   string
+	UpstreamSSLVerify bool
+	HasBasicAuth     bool
+	HtpasswdPath     string
 }
 
 func renderConfig(d *Domain, htpasswdPath string) ([]byte, error) {
+	scheme := d.UpstreamScheme
+	if scheme == "" {
+		scheme = "http"
+	}
 	data := configData{
-		Domain:       d.Domain,
-		UpstreamIP:   d.UpstreamIP,
-		UpstreamPort: d.UpstreamPort,
-		HasBasicAuth: d.BasicAuthUser != "" && d.BasicAuthPassword != "",
-		HtpasswdPath: htpasswdPath,
+		Domain:            d.Domain,
+		UpstreamIP:        d.UpstreamIP,
+		UpstreamPort:      d.UpstreamPort,
+		UpstreamScheme:    scheme,
+		UpstreamSSLVerify: d.UpstreamSSLVerify,
+		HasBasicAuth:      d.BasicAuthUser != "" && d.BasicAuthPassword != "",
+		HtpasswdPath:      htpasswdPath,
 	}
 	var buf bytes.Buffer
 	if err := confTmpl.Execute(&buf, data); err != nil {
