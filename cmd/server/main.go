@@ -75,6 +75,11 @@ func main() {
 		slog.Error("failed to sync nftables rules on startup", "error", err)
 	}
 
+	// Sync nginx configs on startup
+	if err := nginxSvc.SyncConfigs(); err != nil {
+		slog.Error("failed to sync nginx configs on startup", "error", err)
+	}
+
 	// Handlers
 	authHandler := auth.NewHandler(authSvc)
 	natHandler := nftables.NewHandler(natSvc)

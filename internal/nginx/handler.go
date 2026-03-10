@@ -1,6 +1,7 @@
 package nginx
 
 import (
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -47,9 +48,12 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	domain, err := h.svc.Create(req)
-	if err != nil {
+	if err != nil && domain == nil {
 		httputil.Error(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	if err != nil {
+		slog.Warn("domain created with config error", "error", err, "domain", domain.Domain)
 	}
 	httputil.JSON(w, http.StatusCreated, domain)
 }

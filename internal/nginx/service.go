@@ -28,6 +28,33 @@ func (s *Service) GetAll() ([]Domain, error) {
 	return s.repo.GetAll()
 }
 
+// SyncConfigs writes nginx configs for all enabled domains that are missing on disk.
+func (s *Service) SyncConfigs() error {
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+
+	domains, err := s.repo.GetAll()
+	if err != nil {
+		return fmt.Errorf("get domains: %w", err)
+	}
+
+	for _, d := range domains {
+		if !d.Enabled {
+			continue
+		}
+		path := s.configPath(d.Domain)
+		if _, err := os.Stat(path); err == nil {
+			continue // config already exists
+		}
+		slog.Info("syncing missing nginx config", "domain", d.Domain)
+		if err := s.writeAndReload(&d); err != nil {
+			slog.Error("failed to sync nginx config", "error", err, "domain", d.Domain)
+		}
+	}
+	return nil
+}
+
 func (s *Service) Create(req CreateDomainRequest) (*Domain, error) {
 	if err := validate.Domain(req.Domain); err != nil {
 		return nil, err
@@ -74,7 +101,7 @@ func (s *Service) Create(req CreateDomainRequest) (*Domain, error) {
 	}
 
 	if err := s.writeAndReload(domain); err != nil {
-		slog.Error("failed to write nginx config", "error", err, "domain", domain.Domain)
+		return domain, fmt.Errorf("domain created but nginx config failed: %w", err)
 	}
 
 	return domain, nil
