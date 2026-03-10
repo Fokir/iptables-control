@@ -241,13 +241,15 @@ func (s *Service) writeAndReload(domain *Domain) error {
 	}
 
 	// Test config before reload
-	if err := exec.Command("nginx", "-t").Run(); err != nil {
+	cmd := exec.Command("nginx", "-t")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
 		// Rollback: remove bad config
 		os.Remove(path)
 		if hasAuth {
 			s.removeHtpasswd(domain.Domain)
 		}
-		return fmt.Errorf("nginx config test failed: %w", err)
+		return fmt.Errorf("nginx config test failed: %s: %w", string(output), err)
 	}
 
 	s.reloadNginx()
