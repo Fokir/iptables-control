@@ -30,6 +30,9 @@ func (r *Repository) GetAll() ([]NatGroup, error) {
 		groups = append(groups, g)
 	}
 
+	if groups == nil {
+		groups = []NatGroup{}
+	}
 	for i := range groups {
 		ports, err := r.GetPortsByGroupID(groups[i].ID)
 		if err != nil {
@@ -169,6 +172,9 @@ func (r *Repository) GetAllEnabled() ([]NatGroup, error) {
 		groups = append(groups, g)
 	}
 
+	if groups == nil {
+		groups = []NatGroup{}
+	}
 	for i := range groups {
 		ports, err := r.GetPortsByGroupID(groups[i].ID)
 		if err != nil {
