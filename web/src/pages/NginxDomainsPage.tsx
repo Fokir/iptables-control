@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Shield, ShieldOff, Lock } from 'lucide-react'
+import { Plus, Trash2, Shield, ShieldOff, Lock, Download, ExternalLink } from 'lucide-react'
 import { api } from '../api/client'
-import type { NginxDomain } from '../types'
+import type { NginxDomain, ExternalNginxDomain } from '../types'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { IpInput } from '../components/ui/IpInput'
@@ -19,10 +19,16 @@ export function NginxDomainsPage() {
   const [basicAuthPassword, setBasicAuthPassword] = useState('')
   const [sslEmail, setSslEmail] = useState('')
   const [sslDomainId, setSslDomainId] = useState<number | null>(null)
+  const [importFilename, setImportFilename] = useState<string | null>(null)
 
   const { data: domains = [], isLoading } = useQuery({
     queryKey: ['nginx-domains'],
     queryFn: () => api.get<NginxDomain[]>('/api/nginx-domains'),
+  })
+
+  const { data: externalDomains = [] } = useQuery({
+    queryKey: ['nginx-domains-external'],
+    queryFn: () => api.get<ExternalNginxDomain[]>('/api/nginx-domains/external'),
   })
 
   const createMut = useMutation({
@@ -65,6 +71,15 @@ export function NginxDomainsPage() {
     },
   })
 
+  const importMut = useMutation({
+    mutationFn: (filename: string) => api.post('/api/nginx-domains/import', { filename }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['nginx-domains'] })
+      queryClient.invalidateQueries({ queryKey: ['nginx-domains-external'] })
+      setImportFilename(null)
+    },
+  })
+
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
@@ -76,7 +91,7 @@ export function NginxDomainsPage() {
 
       {isLoading ? (
         <p className="text-slate-400">Loading...</p>
-      ) : domains.length === 0 ? (
+      ) : domains.length === 0 && externalDomains.length === 0 ? (
         <p className="text-slate-500">No domains configured.</p>
       ) : (
         <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
@@ -93,7 +108,7 @@ export function NginxDomainsPage() {
             </thead>
             <tbody>
               {domains.map(d => (
-                <tr key={d.id} className="border-b border-slate-700/50 last:border-0">
+                <tr key={`managed-${d.id}`} className="border-b border-slate-700/50 last:border-0">
                   <td className="p-3">
                     <Toggle checked={d.enabled} onChange={enabled => toggleMut.mutate({ id: d.id, enabled })} />
                   </td>
@@ -121,6 +136,42 @@ export function NginxDomainsPage() {
                   <td className="p-3 text-right">
                     <button onClick={() => deleteMut.mutate(d.id)} className="text-slate-400 hover:text-red-400 transition-colors">
                       <Trash2 size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {externalDomains.map(d => (
+                <tr key={`ext-${d.filename}`} className="border-b border-slate-700/50 last:border-0 bg-slate-800/50">
+                  <td className="p-3">
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
+                      <ExternalLink size={12} /> External
+                    </span>
+                  </td>
+                  <td className="p-3 text-slate-200 font-mono">{d.domain}</td>
+                  <td className="p-3 text-slate-300 font-mono">
+                    {d.upstreamIp && d.upstreamPort ? `${d.upstreamIp}:${d.upstreamPort}` : <span className="text-slate-500">unknown</span>}
+                  </td>
+                  <td className="p-3">
+                    {d.hasBasicAuth ? (
+                      <span className="text-blue-400 flex items-center gap-1"><Lock size={14} /> Yes</span>
+                    ) : (
+                      <span className="text-slate-500">-</span>
+                    )}
+                  </td>
+                  <td className="p-3">
+                    {d.sslEnabled ? (
+                      <span className="text-green-400 flex items-center gap-1"><Shield size={14} /> Active</span>
+                    ) : (
+                      <span className="text-slate-500">-</span>
+                    )}
+                  </td>
+                  <td className="p-3 text-right">
+                    <button
+                      onClick={() => setImportFilename(d.filename)}
+                      className="text-slate-400 hover:text-emerald-400 transition-colors"
+                      title="Import to managed"
+                    >
+                      <Download size={16} />
                     </button>
                   </td>
                 </tr>
@@ -159,6 +210,31 @@ export function NginxDomainsPage() {
             <Button type="submit" loading={sslMut.isPending}>Request Certificate</Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal open={importFilename !== null} onClose={() => setImportFilename(null)} title="Import External Config">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-300">
+            Config <span className="font-mono text-amber-400">{importFilename}</span> will be imported and managed by system-control.
+          </p>
+          <p className="text-sm text-slate-400">
+            A backup of the original config will be created (<span className="font-mono">.bak</span>).
+            The config will be regenerated using the standard template.
+          </p>
+          <p className="text-sm text-yellow-400/80">
+            Note: Basic Auth credentials cannot be imported. You can set them after import.
+          </p>
+          {importMut.error && <p className="text-sm text-red-400">{importMut.error.message}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setImportFilename(null)}>Cancel</Button>
+            <Button
+              onClick={() => importFilename && importMut.mutate(importFilename)}
+              loading={importMut.isPending}
+            >
+              Import
+            </Button>
+          </div>
+        </div>
       </Modal>
     </div>
   )

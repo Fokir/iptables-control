@@ -56,6 +56,15 @@ export interface NginxDomain {
   updatedAt: string
 }
 
+export interface ExternalNginxDomain {
+  filename: string
+  domain: string
+  upstreamIp: string
+  upstreamPort: number
+  sslEnabled: boolean
+  hasBasicAuth: boolean
+}
+
 export interface AuditLogEntry {
   id: number
   userId: number | null

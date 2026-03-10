@@ -2,11 +2,13 @@ package nginx
 
 import (
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -247,4 +249,116 @@ func validateBasicAuth(user, password string) error {
 		return fmt.Errorf("basic auth requires both user and password, or neither")
 	}
 	return nil
+}
+
+func (s *Service) ListExternal() ([]ExternalDomain, error) {
+	if runtime.GOOS != "linux" {
+		return []ExternalDomain{}, nil
+	}
+
+	entries, err := os.ReadDir(s.sitesDir)
+	if err != nil {
+		return nil, fmt.Errorf("read sites dir: %w", err)
+	}
+
+	var result []ExternalDomain
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		// Skip our managed configs and non-conf files
+		if strings.HasPrefix(name, "sc_") || !strings.HasSuffix(name, ".conf") {
+			continue
+		}
+
+		content, err := os.ReadFile(filepath.Join(s.sitesDir, name))
+		if err != nil {
+			slog.Warn("failed to read external config", "file", name, "error", err)
+			continue
+		}
+
+		ext, err := parseExternalConfig(string(content))
+		if err != nil {
+			slog.Debug("failed to parse external config", "file", name, "error", err)
+			continue
+		}
+		ext.Filename = name
+		result = append(result, ext)
+	}
+
+	if result == nil {
+		result = []ExternalDomain{}
+	}
+	return result, nil
+}
+
+func (s *Service) ImportExternal(filename string) (*Domain, error) {
+	if runtime.GOOS != "linux" {
+		return nil, fmt.Errorf("import is only supported on Linux")
+	}
+
+	// Validate filename to prevent path traversal
+	if strings.Contains(filename, "/") || strings.Contains(filename, "\\") || strings.Contains(filename, "..") {
+		return nil, fmt.Errorf("invalid filename")
+	}
+
+	srcPath := filepath.Join(s.sitesDir, filename)
+	info, err := os.Stat(srcPath)
+	if err != nil || info.IsDir() {
+		return nil, fmt.Errorf("config file not found: %s", filename)
+	}
+
+	content, err := os.ReadFile(srcPath)
+	if err != nil {
+		return nil, fmt.Errorf("read config: %w", err)
+	}
+
+	ext, err := parseExternalConfig(string(content))
+	if err != nil {
+		return nil, fmt.Errorf("parse config: %w", err)
+	}
+
+	// Check domain doesn't already exist in DB
+	existing, _ := s.repo.GetAll()
+	for _, d := range existing {
+		if d.Domain == ext.Domain {
+			return nil, fmt.Errorf("domain %s already exists in database", ext.Domain)
+		}
+	}
+
+	// Create backup
+	backupPath := srcPath + ".bak"
+	if err := os.WriteFile(backupPath, content, fs.FileMode(info.Mode())); err != nil {
+		return nil, fmt.Errorf("create backup: %w", err)
+	}
+	slog.Info("created backup of external config", "backup", backupPath)
+
+	// Create domain in DB
+	domain := &Domain{
+		Domain:       ext.Domain,
+		UpstreamIP:   ext.UpstreamIP,
+		UpstreamPort: ext.UpstreamPort,
+		SSLEnabled:   ext.SSLEnabled,
+		Enabled:      true,
+	}
+
+	if ext.UpstreamPort == 0 {
+		domain.UpstreamPort = 80
+	}
+
+	if err := s.repo.Create(domain); err != nil {
+		return nil, fmt.Errorf("create domain: %w", err)
+	}
+
+	// Write our managed config
+	if err := s.writeAndReload(domain); err != nil {
+		slog.Error("failed to write nginx config after import", "error", err, "domain", domain.Domain)
+		return domain, nil
+	}
+
+	// Remove original file (backup exists)
+	os.Remove(srcPath)
+
+	return domain, nil
 }

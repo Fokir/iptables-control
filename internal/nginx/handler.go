@@ -20,6 +20,8 @@ func (h *Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", h.list)
 	r.Post("/", h.create)
+	r.Get("/external", h.listExternal)
+	r.Post("/import", h.importExternal)
 	r.Put("/{id}", h.update)
 	r.Delete("/{id}", h.delete)
 	r.Post("/{id}/enable", h.enable)
@@ -139,4 +141,36 @@ func (h *Handler) requestSSL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httputil.JSON(w, http.StatusOK, nil)
+}
+
+func (h *Handler) listExternal(w http.ResponseWriter, r *http.Request) {
+	domains, err := h.svc.ListExternal()
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	httputil.JSON(w, http.StatusOK, domains)
+}
+
+type importRequest struct {
+	Filename string `json:"filename"`
+}
+
+func (h *Handler) importExternal(w http.ResponseWriter, r *http.Request) {
+	var req importRequest
+	if err := httputil.Decode(r, &req); err != nil {
+		httputil.Error(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if req.Filename == "" {
+		httputil.Error(w, http.StatusBadRequest, "filename is required")
+		return
+	}
+
+	domain, err := h.svc.ImportExternal(req.Filename)
+	if err != nil {
+		httputil.Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	httputil.JSON(w, http.StatusCreated, domain)
 }
