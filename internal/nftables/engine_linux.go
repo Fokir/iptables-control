@@ -135,7 +135,7 @@ func buildSNATExprs(targetIP net.IP, proto byte, dport uint16, snatIP net.IP) []
 		&expr.Cmp{Op: expr.CmpOpEq, Register: 1, Data: binaryPort(dport)},
 		&expr.Immediate{Register: 1, Data: snatIP},
 		&expr.NAT{
-			Type:       expr.NATTypeSrcNAT,
+			Type:       expr.NATTypeSourceNAT,
 			Family:     unix.NFPROTO_IPV4,
 			RegAddrMin: 1,
 		},

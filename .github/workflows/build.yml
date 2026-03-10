@@ -18,6 +18,11 @@ jobs:
         with:
           go-version: '1.23'
 
+      - name: Create frontend placeholder
+        run: |
+          mkdir -p cmd/server/frontend
+          echo '<html></html>' > cmd/server/frontend/index.html
+
       - name: Run Go tests
         run: go test -race -cover ./...
 
