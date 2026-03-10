@@ -29,6 +29,13 @@ func Open(dbPath string) (*sql.DB, error) {
 }
 
 func migrate(db *sql.DB) error {
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS _migrations (
+		name TEXT PRIMARY KEY,
+		applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`); err != nil {
+		return fmt.Errorf("create migrations table: %w", err)
+	}
+
 	entries, err := migrationsFS.ReadDir("migrations")
 	if err != nil {
 		return fmt.Errorf("read migrations dir: %w", err)
@@ -36,6 +43,12 @@ func migrate(db *sql.DB) error {
 
 	for _, entry := range entries {
 		name := entry.Name()
+
+		var exists bool
+		if err := db.QueryRow("SELECT 1 FROM _migrations WHERE name = ?", name).Scan(&exists); err == nil {
+			continue
+		}
+
 		content, err := migrationsFS.ReadFile("migrations/" + name)
 		if err != nil {
 			return fmt.Errorf("read migration %s: %w", name, err)
@@ -44,6 +57,10 @@ func migrate(db *sql.DB) error {
 		slog.Info("applying migration", "name", name)
 		if _, err := db.Exec(string(content)); err != nil {
 			return fmt.Errorf("execute migration %s: %w", name, err)
+		}
+
+		if _, err := db.Exec("INSERT INTO _migrations (name) VALUES (?)", name); err != nil {
+			return fmt.Errorf("record migration %s: %w", name, err)
 		}
 	}
 
