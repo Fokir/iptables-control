@@ -209,8 +209,6 @@ LimitNOFILE=65536
 
 # Security hardening
 NoNewPrivileges=no
-ProtectSystem=strict
-ReadWritePaths=$DATA_DIR /etc/nginx/sites-enabled /etc/letsencrypt /var/log/letsencrypt /var/lib/letsencrypt
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
 
 [Install]
@@ -224,9 +222,9 @@ if [ ! -f "$SERVICE_FILE" ]; then
     generate_service_file
     systemctl enable system-control
 else
-    # Update service file if ReadWritePaths is outdated
-    if ! grep -q '/etc/letsencrypt' "$SERVICE_FILE"; then
-        log "Updating systemd service (adding certbot paths)..."
+    # Update service file if it has outdated ProtectSystem=strict
+    if grep -q 'ProtectSystem=strict' "$SERVICE_FILE"; then
+        log "Updating systemd service (removing ProtectSystem=strict)..."
         generate_service_file
     fi
 fi
