@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Shield, ShieldOff, Lock, Download, ExternalLink } from 'lucide-react'
+import { Plus, Trash2, Shield, ShieldOff, Lock, Download, ExternalLink, Pencil } from 'lucide-react'
 import { api } from '../api/client'
 import type { NginxDomain, ExternalNginxDomain, NetworkNode } from '../types'
 import { Button } from '../components/ui/Button'
@@ -22,6 +22,8 @@ export function NginxDomainsPage() {
   const [sslEmail, setSslEmail] = useState('')
   const [sslDomainId, setSslDomainId] = useState<number | null>(null)
   const [importFilename, setImportFilename] = useState<string | null>(null)
+  const [editDomain, setEditDomain] = useState<NginxDomain | null>(null)
+  const [editForm, setEditForm] = useState({ domain: '', upstreamIp: '', upstreamPort: '80', upstreamScheme: 'http', upstreamSslVerify: true, basicAuthUser: '', basicAuthPassword: '' })
 
   const { data: domains = [], isLoading } = useQuery({
     queryKey: ['nginx-domains'],
@@ -83,6 +85,35 @@ export function NginxDomainsPage() {
       setSslEmail('')
     },
   })
+
+  const updateMut = useMutation({
+    mutationFn: () => api.put(`/api/nginx-domains/${editDomain!.id}`, {
+      domain: editForm.domain,
+      upstreamIp: editForm.upstreamIp,
+      upstreamPort: +editForm.upstreamPort,
+      upstreamScheme: editForm.upstreamScheme,
+      upstreamSslVerify: editForm.upstreamSslVerify,
+      basicAuthUser: editForm.basicAuthUser || undefined,
+      basicAuthPassword: editForm.basicAuthPassword || undefined,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['nginx-domains'] })
+      setEditDomain(null)
+    },
+  })
+
+  const openEdit = (d: NginxDomain) => {
+    setEditForm({
+      domain: d.domain,
+      upstreamIp: d.upstreamIp,
+      upstreamPort: String(d.upstreamPort),
+      upstreamScheme: d.upstreamScheme || 'http',
+      upstreamSslVerify: d.upstreamSslVerify,
+      basicAuthUser: d.basicAuthUser || '',
+      basicAuthPassword: '',
+    })
+    setEditDomain(d)
+  }
 
   const importMut = useMutation({
     mutationFn: (filename: string) => api.post('/api/nginx-domains/import', { filename }),
@@ -146,7 +177,10 @@ export function NginxDomainsPage() {
                       </button>
                     )}
                   </td>
-                  <td className="p-3 text-right">
+                  <td className="p-3 text-right flex justify-end gap-2">
+                    <button onClick={() => openEdit(d)} className="text-slate-400 hover:text-blue-400 transition-colors">
+                      <Pencil size={16} />
+                    </button>
                     <button onClick={() => deleteMut.mutate(d.id)} className="text-slate-400 hover:text-red-400 transition-colors">
                       <Trash2 size={16} />
                     </button>
@@ -249,6 +283,65 @@ export function NginxDomainsPage() {
           <div className="flex justify-end gap-2">
             <Button variant="ghost" type="button" onClick={() => setShowForm(false)}>Cancel</Button>
             <Button type="submit" loading={createMut.isPending}>Create</Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal open={editDomain !== null} onClose={() => setEditDomain(null)} title="Edit Domain">
+        <form onSubmit={e => { e.preventDefault(); updateMut.mutate() }} className="space-y-4">
+          <Input label="Domain" placeholder="example.com" value={editForm.domain} onChange={e => setEditForm(f => ({ ...f, domain: e.target.value }))} required />
+          <div className="flex flex-col gap-1">
+            <label className="text-sm text-slate-400">Upstream IP</label>
+            <div className="flex gap-2">
+              <IpInput value={editForm.upstreamIp} onChange={v => setEditForm(f => ({ ...f, upstreamIp: v }))} className="flex-1" placeholder="10.7.0.3" required />
+              {ipOptions.length > 0 && (
+                <select
+                  value=""
+                  onChange={e => { if (e.target.value) setEditForm(f => ({ ...f, upstreamIp: e.target.value })) }}
+                  className="bg-slate-700 border border-slate-600 rounded-lg px-2 py-2 text-slate-100 text-sm"
+                >
+                  <option value="">Select node</option>
+                  {ipOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              )}
+            </div>
+          </div>
+          <div className="flex gap-4">
+            <Input label="Upstream Port" type="number" value={editForm.upstreamPort} onChange={e => setEditForm(f => ({ ...f, upstreamPort: e.target.value }))} />
+            <div className="flex flex-col gap-1">
+              <label className="text-sm text-slate-400">Scheme</label>
+              <select
+                value={editForm.upstreamScheme}
+                onChange={e => setEditForm(f => ({ ...f, upstreamScheme: e.target.value }))}
+                className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm"
+              >
+                <option value="http">HTTP</option>
+                <option value="https">HTTPS</option>
+              </select>
+            </div>
+          </div>
+          {editForm.upstreamScheme === 'https' && (
+            <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!editForm.upstreamSslVerify}
+                onChange={e => setEditForm(f => ({ ...f, upstreamSslVerify: !e.target.checked }))}
+                className="rounded border-slate-600 bg-slate-700 text-blue-500"
+              />
+              Skip upstream SSL certificate verification
+            </label>
+          )}
+          <div className="border-t border-slate-700 pt-4">
+            <p className="text-sm text-slate-400 mb-3">Basic Auth (optional, leave password empty to keep current)</p>
+            <div className="space-y-3">
+              <Input label="Username" placeholder="admin" value={editForm.basicAuthUser} onChange={e => setEditForm(f => ({ ...f, basicAuthUser: e.target.value }))} />
+              <Input label="Password" type="password" placeholder="new password" value={editForm.basicAuthPassword} onChange={e => setEditForm(f => ({ ...f, basicAuthPassword: e.target.value }))} />
+            </div>
+          </div>
+          {updateMut.error && <p className="text-sm text-red-400">{updateMut.error.message}</p>}
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" type="button" onClick={() => setEditDomain(null)}>Cancel</Button>
+            <Button type="submit" loading={updateMut.isPending}>Save</Button>
           </div>
         </form>
       </Modal>

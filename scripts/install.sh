@@ -191,9 +191,7 @@ fi
 # Systemd service (first install or update)
 # ─────────────────────────────────────────────
 
-if [ ! -f "$SERVICE_FILE" ]; then
-    log "Creating systemd service..."
-
+generate_service_file() {
     cat > "$SERVICE_FILE" <<EOF
 [Unit]
 Description=System Control - Network Management
@@ -212,15 +210,25 @@ LimitNOFILE=65536
 # Security hardening
 NoNewPrivileges=no
 ProtectSystem=strict
-ReadWritePaths=$DATA_DIR /etc/nginx/sites-enabled
+ReadWritePaths=$DATA_DIR /etc/nginx/sites-enabled /etc/letsencrypt /var/log/letsencrypt /var/lib/letsencrypt
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
 
 [Install]
 WantedBy=multi-user.target
 EOF
-
     systemctl daemon-reload
+}
+
+if [ ! -f "$SERVICE_FILE" ]; then
+    log "Creating systemd service..."
+    generate_service_file
     systemctl enable system-control
+else
+    # Update service file if ReadWritePaths is outdated
+    if ! grep -q '/etc/letsencrypt' "$SERVICE_FILE"; then
+        log "Updating systemd service (adding certbot paths)..."
+        generate_service_file
+    fi
 fi
 
 # Restart service

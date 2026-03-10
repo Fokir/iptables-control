@@ -90,13 +90,19 @@ func (s *Service) Update(id int64, req UpdateDomainRequest) (*Domain, error) {
 	if req.UpstreamPort == 0 {
 		req.UpstreamPort = 80
 	}
-	if err := validateBasicAuth(req.BasicAuthUser, req.BasicAuthPassword); err != nil {
-		return nil, err
-	}
 
 	domain, err := s.repo.GetByID(id)
 	if err != nil {
 		return nil, fmt.Errorf("domain not found: %w", err)
+	}
+
+	// If user is set but password is empty, keep existing password
+	if req.BasicAuthUser != "" && req.BasicAuthPassword == "" && domain.BasicAuthUser == req.BasicAuthUser {
+		req.BasicAuthPassword = domain.BasicAuthPassword
+	}
+
+	if err := validateBasicAuth(req.BasicAuthUser, req.BasicAuthPassword); err != nil {
+		return nil, err
 	}
 
 	scheme := req.UpstreamScheme
