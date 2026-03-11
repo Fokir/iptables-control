@@ -112,6 +112,35 @@ export interface TrafficSeries {
   points: TrafficPoint[]
 }
 
+export interface WireguardStatus {
+  installed: boolean
+  running: boolean
+  publicKey?: string
+  listenPort?: number
+  address?: string
+  endpoint?: string
+  peerCount: number
+}
+
+export interface WireguardPeer {
+  id: number
+  name: string
+  publicKey: string
+  allowedIps: string
+  address: string
+  dns: string
+  endpoint?: string
+  latestHandshake?: string
+  transferRx?: number
+  transferTx?: number
+  createdAt: string
+}
+
+export interface WireguardPeerConfig {
+  config: string
+  qrCode?: string
+}
+
 export interface ApiResponse<T> {
   success: boolean
   data?: T

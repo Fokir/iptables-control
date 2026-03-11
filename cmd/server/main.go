@@ -21,6 +21,7 @@ import (
 	"github.com/sokol/system-control/internal/nftables"
 	"github.com/sokol/system-control/internal/nginx"
 	"github.com/sokol/system-control/internal/traffic"
+	"github.com/sokol/system-control/internal/wireguard"
 )
 
 var version = "dev"
@@ -57,6 +58,7 @@ func main() {
 	nginxRepo := nginx.NewRepository(db)
 	auditRepo := audit.NewRepository(db)
 	trafficRepo := traffic.NewRepository(db)
+	wgRepo := wireguard.NewRepository(db)
 
 	// Services
 	authSvc := auth.NewService(authRepo, cfg.SessionMaxAge)
@@ -67,6 +69,8 @@ func main() {
 	nginxSvc := nginx.NewService(nginxRepo, cfg.NginxSitesDir)
 	auditSvc := audit.NewService(auditRepo)
 	trafficSvc := traffic.NewService(trafficRepo, nodesRepo)
+	wgEngine := wireguard.NewEngine()
+	wgSvc := wireguard.NewService(wgRepo, wgEngine)
 
 	// Traffic collector
 	var trafficInterfaces []string
@@ -104,6 +108,7 @@ func main() {
 	nginxHandler := nginx.NewHandler(nginxSvc)
 	auditHandler := audit.NewHandler(auditSvc)
 	trafficHandler := traffic.NewHandler(trafficSvc)
+	wgHandler := wireguard.NewHandler(wgSvc)
 
 	// Router
 	r := chi.NewRouter()
@@ -128,6 +133,7 @@ func main() {
 			r.Mount("/nginx-domains", nginxHandler.Routes())
 			r.Mount("/audit-logs", auditHandler.Routes())
 			r.Mount("/traffic", trafficHandler.Routes())
+			r.Mount("/wireguard", wgHandler.Routes())
 		})
 	})
 

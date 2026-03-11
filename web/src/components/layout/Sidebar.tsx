@@ -1,11 +1,12 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Network, Globe, Server, ScrollText, LogOut, BarChart3 } from 'lucide-react'
+import { Network, Globe, Server, ScrollText, LogOut, BarChart3, Shield } from 'lucide-react'
 import { api } from '../../api/client'
 
 const links = [
   { to: '/', label: 'NAT Rules', icon: Network },
   { to: '/nodes', label: 'Network Nodes', icon: Server },
   { to: '/traffic', label: 'Traffic', icon: BarChart3 },
+  { to: '/wireguard', label: 'WireGuard', icon: Shield },
   { to: '/nginx', label: 'Nginx Domains', icon: Globe },
   { to: '/logs', label: 'Audit Log', icon: ScrollText },
 ]
