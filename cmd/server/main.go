@@ -101,6 +101,13 @@ func main() {
 		slog.Error("failed to sync nginx configs on startup", "error", err)
 	}
 
+	// Sync wireguard peers from config on startup
+	if imported, err := wgSvc.SyncPeers(); err != nil {
+		slog.Error("failed to sync wireguard peers on startup", "error", err)
+	} else if imported > 0 {
+		slog.Info("imported wireguard peers from config", "count", imported)
+	}
+
 	// Handlers
 	authHandler := auth.NewHandler(authSvc)
 	natHandler := nftables.NewHandler(natSvc)

@@ -23,6 +23,7 @@ type Peer struct {
 	AllowedIPs   string    `json:"allowedIps"`
 	Address      string    `json:"address"`
 	DNS          string    `json:"dns"`
+	Imported     bool      `json:"imported"`
 	Endpoint     string    `json:"endpoint,omitempty"`
 	LatestHandshake string `json:"latestHandshake,omitempty"`
 	TransferRx   int64     `json:"transferRx,omitempty"`

@@ -4,6 +4,18 @@ package wireguard
 
 import "log/slog"
 
+// ParsedPeer represents a peer parsed from wg0.conf.
+type ParsedPeer struct {
+	Name         string
+	PublicKey    string
+	PresharedKey string
+	AllowedIPs   string
+}
+
+func (e *Engine) ParseExistingPeers() ([]ParsedPeer, error) {
+	return nil, nil
+}
+
 func (e *Engine) IsInstalled() bool {
 	slog.Warn("wireguard engine is only supported on Linux")
 	return false

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Download, QrCode, Pencil, Copy, Check, X, Shield, ShieldOff } from 'lucide-react'
+import { Plus, Trash2, Download, QrCode, Pencil, Copy, Check, Shield, ShieldOff, RefreshCw } from 'lucide-react'
 import { api } from '../api/client'
 import type { WireguardStatus, WireguardPeer, WireguardPeerConfig } from '../types'
 import { Button } from '../components/ui/Button'
@@ -92,6 +92,14 @@ export function WireGuardPage() {
 
   const deleteMut = useMutation({
     mutationFn: (id: number) => api.delete(`/api/wireguard/peers/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['wg-peers'] })
+      queryClient.invalidateQueries({ queryKey: ['wg-status'] })
+    },
+  })
+
+  const syncMut = useMutation({
+    mutationFn: () => api.post('/api/wireguard/sync'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wg-peers'] })
       queryClient.invalidateQueries({ queryKey: ['wg-status'] })
@@ -197,6 +205,9 @@ export function WireGuardPage() {
               <Button size="sm" variant="ghost" onClick={() => disableMut.mutate()} loading={disableMut.isPending}>
                 <ShieldOff size={16} className="mr-1.5" /> Stop
               </Button>
+              <Button size="sm" variant="ghost" onClick={() => syncMut.mutate()} loading={syncMut.isPending}>
+                <RefreshCw size={16} className="mr-1.5" /> Sync
+              </Button>
               <Button size="sm" onClick={() => setShowAddForm(true)}>
                 <Plus size={16} className="mr-1.5" /> Add Peer
               </Button>
@@ -257,7 +268,14 @@ export function WireGuardPage() {
                   return (
                     <tr key={p.id} className="border-b border-slate-700/50 last:border-0">
                       <td className="p-3">
-                        <span className="text-slate-200 font-medium">{p.name}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-slate-200 font-medium">{p.name}</span>
+                          {p.imported && (
+                            <span className="text-xs font-medium text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">
+                              Imported
+                            </span>
+                          )}
+                        </div>
                         <span className="text-slate-500 text-xs block font-mono mt-0.5">{p.publicKey.slice(0, 20)}...</span>
                       </td>
                       <td className="p-3 text-slate-300 font-mono">{p.address}</td>
@@ -285,20 +303,24 @@ export function WireGuardPage() {
                       </td>
                       <td className="p-3 text-right">
                         <div className="flex justify-end gap-1.5">
-                          <button
-                            onClick={() => setConfigPeer(p)}
-                            className="text-slate-400 hover:text-blue-400 transition-colors p-1"
-                            title="Download config"
-                          >
-                            <Download size={15} />
-                          </button>
-                          <button
-                            onClick={() => handleShowQR(p.id)}
-                            className="text-slate-400 hover:text-purple-400 transition-colors p-1"
-                            title="QR Code"
-                          >
-                            <QrCode size={15} />
-                          </button>
+                          {!p.imported && (
+                            <>
+                              <button
+                                onClick={() => setConfigPeer(p)}
+                                className="text-slate-400 hover:text-blue-400 transition-colors p-1"
+                                title="Download config"
+                              >
+                                <Download size={15} />
+                              </button>
+                              <button
+                                onClick={() => handleShowQR(p.id)}
+                                className="text-slate-400 hover:text-purple-400 transition-colors p-1"
+                                title="QR Code"
+                              >
+                                <QrCode size={15} />
+                              </button>
+                            </>
+                          )}
                           <button
                             onClick={() => openEdit(p)}
                             className="text-slate-400 hover:text-blue-400 transition-colors p-1"

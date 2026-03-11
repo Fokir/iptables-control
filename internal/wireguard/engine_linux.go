@@ -331,6 +331,65 @@ ListenPort = %d
 	return nil
 }
 
+// ParsedPeer represents a peer parsed from wg0.conf.
+type ParsedPeer struct {
+	Name         string
+	PublicKey    string
+	PresharedKey string
+	AllowedIPs   string
+}
+
+// ParseExistingPeers reads wg0.conf and returns all peers found.
+func (e *Engine) ParseExistingPeers() ([]ParsedPeer, error) {
+	data, err := os.ReadFile(wgConfPath)
+	if err != nil {
+		return nil, fmt.Errorf("read config: %w", err)
+	}
+
+	var peers []ParsedPeer
+	re := regexp.MustCompile(`(?ms)# BEGIN_PEER (.+?)\n(.*?)# END_PEER`)
+	matches := re.FindAllStringSubmatch(string(data), -1)
+
+	for _, m := range matches {
+		name := strings.TrimSpace(m[1])
+		block := m[2]
+
+		var pubKey, psk, allowedIPs string
+		for _, line := range strings.Split(block, "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "PublicKey") {
+				parts := strings.SplitN(line, "=", 2)
+				if len(parts) == 2 {
+					pubKey = strings.TrimSpace(parts[1])
+				}
+			}
+			if strings.HasPrefix(line, "PresharedKey") {
+				parts := strings.SplitN(line, "=", 2)
+				if len(parts) == 2 {
+					psk = strings.TrimSpace(parts[1])
+				}
+			}
+			if strings.HasPrefix(line, "AllowedIPs") {
+				parts := strings.SplitN(line, "=", 2)
+				if len(parts) == 2 {
+					allowedIPs = strings.TrimSpace(parts[1])
+				}
+			}
+		}
+
+		if pubKey != "" {
+			peers = append(peers, ParsedPeer{
+				Name:         name,
+				PublicKey:    pubKey,
+				PresharedKey: psk,
+				AllowedIPs:   allowedIPs,
+			})
+		}
+	}
+
+	return peers, nil
+}
+
 // syncConf applies the current config without restarting the interface.
 func (e *Engine) syncConf() error {
 	// Strip the interface-level config and create a temp file for wg syncconf

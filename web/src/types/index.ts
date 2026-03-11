@@ -129,6 +129,7 @@ export interface WireguardPeer {
   allowedIps: string
   address: string
   dns: string
+  imported: boolean
   endpoint?: string
   latestHandshake?: string
   transferRx?: number

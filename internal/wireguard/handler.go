@@ -28,6 +28,7 @@ func (h *Handler) Routes() chi.Router {
 	r.Delete("/peers/{id}", h.deletePeer)
 	r.Get("/peers/{id}/config", h.getPeerConfig)
 	r.Get("/peers/{id}/qrcode", h.getPeerQRCode)
+	r.Post("/sync", h.syncPeers)
 	return r
 }
 
@@ -175,6 +176,15 @@ func (h *Handler) getPeerQRCode(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Length", strconv.Itoa(len(qr)))
 	w.WriteHeader(http.StatusOK)
 	w.Write(qr)
+}
+
+func (h *Handler) syncPeers(w http.ResponseWriter, r *http.Request) {
+	count, err := h.svc.SyncPeers()
+	if err != nil {
+		httputil.Error(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	httputil.JSON(w, http.StatusOK, map[string]int{"imported": count})
 }
 
 func (h *Handler) parseID(r *http.Request) (int64, error) {

@@ -14,7 +14,7 @@ func NewRepository(db *sql.DB) *Repository {
 }
 
 func (r *Repository) GetAll() ([]Peer, error) {
-	rows, err := r.db.Query("SELECT id, name, public_key, preshared_key, private_key, allowed_ips, address, dns, created_at FROM wireguard_peers ORDER BY id")
+	rows, err := r.db.Query("SELECT id, name, public_key, preshared_key, private_key, allowed_ips, address, dns, imported, created_at FROM wireguard_peers ORDER BY id")
 	if err != nil {
 		return nil, err
 	}
@@ -23,7 +23,7 @@ func (r *Repository) GetAll() ([]Peer, error) {
 	var peers []Peer
 	for rows.Next() {
 		var p Peer
-		if err := rows.Scan(&p.ID, &p.Name, &p.PublicKey, &p.PresharedKey, &p.PrivateKey, &p.AllowedIPs, &p.Address, &p.DNS, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.PublicKey, &p.PresharedKey, &p.PrivateKey, &p.AllowedIPs, &p.Address, &p.DNS, &p.Imported, &p.CreatedAt); err != nil {
 			return nil, err
 		}
 		peers = append(peers, p)
@@ -37,9 +37,9 @@ func (r *Repository) GetAll() ([]Peer, error) {
 func (r *Repository) GetByID(id int64) (*Peer, error) {
 	var p Peer
 	err := r.db.QueryRow(
-		"SELECT id, name, public_key, preshared_key, private_key, allowed_ips, address, dns, created_at FROM wireguard_peers WHERE id = ?",
+		"SELECT id, name, public_key, preshared_key, private_key, allowed_ips, address, dns, imported, created_at FROM wireguard_peers WHERE id = ?",
 		id,
-	).Scan(&p.ID, &p.Name, &p.PublicKey, &p.PresharedKey, &p.PrivateKey, &p.AllowedIPs, &p.Address, &p.DNS, &p.CreatedAt)
+	).Scan(&p.ID, &p.Name, &p.PublicKey, &p.PresharedKey, &p.PrivateKey, &p.AllowedIPs, &p.Address, &p.DNS, &p.Imported, &p.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -49,9 +49,21 @@ func (r *Repository) GetByID(id int64) (*Peer, error) {
 func (r *Repository) GetByName(name string) (*Peer, error) {
 	var p Peer
 	err := r.db.QueryRow(
-		"SELECT id, name, public_key, preshared_key, private_key, allowed_ips, address, dns, created_at FROM wireguard_peers WHERE name = ?",
+		"SELECT id, name, public_key, preshared_key, private_key, allowed_ips, address, dns, imported, created_at FROM wireguard_peers WHERE name = ?",
 		name,
-	).Scan(&p.ID, &p.Name, &p.PublicKey, &p.PresharedKey, &p.PrivateKey, &p.AllowedIPs, &p.Address, &p.DNS, &p.CreatedAt)
+	).Scan(&p.ID, &p.Name, &p.PublicKey, &p.PresharedKey, &p.PrivateKey, &p.AllowedIPs, &p.Address, &p.DNS, &p.Imported, &p.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+func (r *Repository) GetByPublicKey(pubKey string) (*Peer, error) {
+	var p Peer
+	err := r.db.QueryRow(
+		"SELECT id, name, public_key, preshared_key, private_key, allowed_ips, address, dns, imported, created_at FROM wireguard_peers WHERE public_key = ?",
+		pubKey,
+	).Scan(&p.ID, &p.Name, &p.PublicKey, &p.PresharedKey, &p.PrivateKey, &p.AllowedIPs, &p.Address, &p.DNS, &p.Imported, &p.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -60,8 +72,8 @@ func (r *Repository) GetByName(name string) (*Peer, error) {
 
 func (r *Repository) Create(p *Peer) error {
 	res, err := r.db.Exec(
-		"INSERT INTO wireguard_peers (name, public_key, preshared_key, private_key, allowed_ips, address, dns) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		p.Name, p.PublicKey, p.PresharedKey, p.PrivateKey, p.AllowedIPs, p.Address, p.DNS,
+		"INSERT INTO wireguard_peers (name, public_key, preshared_key, private_key, allowed_ips, address, dns, imported) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+		p.Name, p.PublicKey, p.PresharedKey, p.PrivateKey, p.AllowedIPs, p.Address, p.DNS, p.Imported,
 	)
 	if err != nil {
 		return err

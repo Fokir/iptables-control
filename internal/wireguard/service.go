@@ -2,6 +2,8 @@ package wireguard
 
 import (
 	"fmt"
+	"log/slog"
+	"regexp"
 	"strings"
 )
 
@@ -254,11 +256,69 @@ func (s *Service) DeletePeer(id int64) error {
 	return nil
 }
 
+// SyncPeers imports existing peers from wg0.conf that are not yet in the database.
+func (s *Service) SyncPeers() (int, error) {
+	if !s.engine.IsInstalled() || !s.engine.IsRunning() {
+		return 0, nil
+	}
+
+	parsed, err := s.engine.ParseExistingPeers()
+	if err != nil {
+		return 0, fmt.Errorf("parse existing peers: %w", err)
+	}
+
+	imported := 0
+	for _, pp := range parsed {
+		// Check if already in DB by public key
+		existing, _ := s.repo.GetByPublicKey(pp.PublicKey)
+		if existing != nil {
+			continue
+		}
+
+		// Also check by name
+		existing, _ = s.repo.GetByName(pp.Name)
+		if existing != nil {
+			continue
+		}
+
+		// Extract address from AllowedIPs (first IP/32)
+		address := pp.AllowedIPs
+		re := regexp.MustCompile(`([\d.]+/32)`)
+		if m := re.FindString(pp.AllowedIPs); m != "" {
+			address = m
+		}
+
+		peer := &Peer{
+			Name:         pp.Name,
+			PublicKey:    pp.PublicKey,
+			PresharedKey: pp.PresharedKey,
+			PrivateKey:   "",
+			AllowedIPs:   pp.AllowedIPs,
+			Address:      address,
+			DNS:          "1.1.1.1, 1.0.0.1",
+			Imported:     true,
+		}
+
+		if err := s.repo.Create(peer); err != nil {
+			slog.Error("failed to import peer", "name", pp.Name, "error", err)
+			continue
+		}
+		imported++
+		slog.Info("imported wireguard peer", "name", pp.Name)
+	}
+
+	return imported, nil
+}
+
 // GetPeerConfig generates the client configuration for a peer.
 func (s *Service) GetPeerConfig(id int64) (*PeerConfig, error) {
 	peer, err := s.repo.GetByID(id)
 	if err != nil {
 		return nil, fmt.Errorf("peer not found: %w", err)
+	}
+
+	if peer.Imported {
+		return nil, fmt.Errorf("config not available for imported peers (private key unknown)")
 	}
 
 	pubKey, _, _, endpoint, err := s.engine.GetServerInfo()
