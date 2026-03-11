@@ -43,6 +43,14 @@ export interface NetworkNode {
   createdAt: string
 }
 
+export interface NodeStatus {
+  nodeId: number
+  isOnline: boolean
+  latencyMs: number
+  firstOnline: string | null
+  lastSeen: string | null
+}
+
 export interface NginxDomain {
   id: number
   domain: string

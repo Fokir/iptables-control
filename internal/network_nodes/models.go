@@ -9,6 +9,14 @@ type NetworkNode struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+type NodeStatus struct {
+	NodeID     int64      `json:"nodeId"`
+	IsOnline   bool       `json:"isOnline"`
+	LatencyMs  float64    `json:"latencyMs"`
+	FirstOnline *time.Time `json:"firstOnline"`
+	LastSeen    *time.Time `json:"lastSeen"`
+}
+
 type CreateNodeRequest struct {
 	Name string `json:"name"`
 	IP   string `json:"ip"`

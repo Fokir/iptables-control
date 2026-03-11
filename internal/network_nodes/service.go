@@ -7,11 +7,16 @@ import (
 )
 
 type Service struct {
-	repo *Repository
+	repo    *Repository
+	monitor *Monitor
 }
 
-func NewService(repo *Repository) *Service {
-	return &Service{repo: repo}
+func NewService(repo *Repository, monitor *Monitor) *Service {
+	return &Service{repo: repo, monitor: monitor}
+}
+
+func (s *Service) GetStatuses() []NodeStatus {
+	return s.monitor.GetStatuses()
 }
 
 func (s *Service) GetAll() ([]NetworkNode, error) {

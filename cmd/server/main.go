@@ -60,7 +60,8 @@ func main() {
 	authSvc := auth.NewService(authRepo, cfg.SessionMaxAge)
 	natEngine := nftables.NewEngine()
 	natSvc := nftables.NewService(natRepo, natEngine)
-	nodesSvc := network_nodes.NewService(nodesRepo)
+	nodesMonitor := network_nodes.NewMonitor(nodesRepo, 30*time.Second)
+	nodesSvc := network_nodes.NewService(nodesRepo, nodesMonitor)
 	nginxSvc := nginx.NewService(nginxRepo, cfg.NginxSitesDir)
 	auditSvc := audit.NewService(auditRepo)
 
@@ -114,6 +115,9 @@ func main() {
 
 	// Serve frontend SPA
 	r.Handle("/*", spaHandler())
+
+	// Start node monitoring
+	nodesMonitor.Start()
 
 	// Background: cleanup expired sessions and old audit logs
 	go func() {

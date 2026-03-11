@@ -17,7 +17,8 @@ func setupNodeTest(t *testing.T) *Service {
 	t.Cleanup(func() { db.Close() })
 
 	repo := NewRepository(db)
-	return NewService(repo)
+	monitor := NewMonitor(repo, 0)
+	return NewService(repo, monitor)
 }
 
 func TestCreateNode_Success(t *testing.T) {

@@ -20,9 +20,15 @@ func (h *Handler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", h.list)
 	r.Post("/", h.create)
+	r.Get("/status", h.status)
 	r.Put("/{id}", h.update)
 	r.Delete("/{id}", h.delete)
 	return r
+}
+
+func (h *Handler) status(w http.ResponseWriter, r *http.Request) {
+	statuses := h.svc.GetStatuses()
+	httputil.JSON(w, http.StatusOK, statuses)
 }
 
 func (h *Handler) list(w http.ResponseWriter, r *http.Request) {
