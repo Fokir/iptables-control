@@ -99,6 +99,19 @@ export interface User {
   username: string
 }
 
+export interface TrafficPoint {
+  t: string
+  in: number
+  out: number
+}
+
+export interface TrafficSeries {
+  nodeId?: number
+  nodeName?: string
+  interfaceName?: string
+  points: TrafficPoint[]
+}
+
 export interface ApiResponse<T> {
   success: boolean
   data?: T

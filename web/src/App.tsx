@@ -6,6 +6,7 @@ import { NatRulesPage } from './pages/NatRulesPage'
 import { NetworkNodesPage } from './pages/NetworkNodesPage'
 import { NginxDomainsPage } from './pages/NginxDomainsPage'
 import { AuditLogPage } from './pages/AuditLogPage'
+import { TrafficPage } from './pages/TrafficPage'
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
         <Route path="/" element={<NatRulesPage />} />
         <Route path="/nodes" element={<NetworkNodesPage />} />
         <Route path="/nginx" element={<NginxDomainsPage />} />
+        <Route path="/traffic" element={<TrafficPage />} />
         <Route path="/logs" element={<AuditLogPage />} />
       </Route>
     </Routes>

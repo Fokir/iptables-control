@@ -20,6 +20,7 @@ import (
 	"github.com/sokol/system-control/internal/network_nodes"
 	"github.com/sokol/system-control/internal/nftables"
 	"github.com/sokol/system-control/internal/nginx"
+	"github.com/sokol/system-control/internal/traffic"
 )
 
 var version = "dev"
@@ -55,6 +56,7 @@ func main() {
 	nodesRepo := network_nodes.NewRepository(db)
 	nginxRepo := nginx.NewRepository(db)
 	auditRepo := audit.NewRepository(db)
+	trafficRepo := traffic.NewRepository(db)
 
 	// Services
 	authSvc := auth.NewService(authRepo, cfg.SessionMaxAge)
@@ -64,6 +66,20 @@ func main() {
 	nodesSvc := network_nodes.NewService(nodesRepo, nodesMonitor)
 	nginxSvc := nginx.NewService(nginxRepo, cfg.NginxSitesDir)
 	auditSvc := audit.NewService(auditRepo)
+	trafficSvc := traffic.NewService(trafficRepo, nodesRepo)
+
+	// Traffic collector
+	var trafficInterfaces []string
+	if cfg.TrafficInterfaces != "" {
+		for _, s := range strings.Split(cfg.TrafficInterfaces, ",") {
+			s = strings.TrimSpace(s)
+			if s != "" {
+				trafficInterfaces = append(trafficInterfaces, s)
+			}
+		}
+	}
+	trafficEngine := traffic.NewEngine()
+	trafficCollector := traffic.NewCollector(trafficRepo, trafficEngine, nodesRepo, trafficInterfaces, time.Duration(cfg.TrafficInterval)*time.Second)
 
 	// Ensure admin user exists
 	if err := authSvc.EnsureAdminUser(cfg.AdminUser, cfg.AdminPassword); err != nil {
@@ -87,6 +103,7 @@ func main() {
 	nodesHandler := network_nodes.NewHandler(nodesSvc)
 	nginxHandler := nginx.NewHandler(nginxSvc)
 	auditHandler := audit.NewHandler(auditSvc)
+	trafficHandler := traffic.NewHandler(trafficSvc)
 
 	// Router
 	r := chi.NewRouter()
@@ -110,6 +127,7 @@ func main() {
 			r.Mount("/network-nodes", nodesHandler.Routes())
 			r.Mount("/nginx-domains", nginxHandler.Routes())
 			r.Mount("/audit-logs", auditHandler.Routes())
+			r.Mount("/traffic", trafficHandler.Routes())
 		})
 	})
 
@@ -118,6 +136,9 @@ func main() {
 
 	// Start node monitoring
 	nodesMonitor.Start()
+
+	// Start traffic collection
+	trafficCollector.Start()
 
 	// Background: cleanup expired sessions and old audit logs
 	go func() {
