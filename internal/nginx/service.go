@@ -34,6 +34,9 @@ func (s *Service) SyncConfigs() error {
 		return nil
 	}
 
+	// Migrate: remove stale htpasswd files from sites-enabled (they belong in htpasswd dir)
+	s.cleanupStaleHtpasswd()
+
 	domains, err := s.repo.GetAll()
 	if err != nil {
 		return fmt.Errorf("get domains: %w", err)
@@ -235,8 +238,12 @@ func (s *Service) configPath(domain string) string {
 	return filepath.Join(s.sitesDir, fmt.Sprintf("sc_%s.conf", domain))
 }
 
+func (s *Service) htpasswdDir() string {
+	return filepath.Join(filepath.Dir(s.sitesDir), "htpasswd")
+}
+
 func (s *Service) htpasswdPath(domain string) string {
-	return filepath.Join(s.sitesDir, fmt.Sprintf("sc_%s.htpasswd", domain))
+	return filepath.Join(s.htpasswdDir(), fmt.Sprintf("sc_%s.htpasswd", domain))
 }
 
 func (s *Service) writeAndReload(domain *Domain) error {
@@ -284,6 +291,9 @@ func (s *Service) writeAndReload(domain *Domain) error {
 }
 
 func (s *Service) writeHtpasswd(domain *Domain) error {
+	if err := os.MkdirAll(s.htpasswdDir(), 0755); err != nil {
+		return fmt.Errorf("create htpasswd dir: %w", err)
+	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(domain.BasicAuthPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
@@ -294,6 +304,21 @@ func (s *Service) writeHtpasswd(domain *Domain) error {
 
 func (s *Service) removeConfig(domain string) {
 	os.Remove(s.configPath(domain))
+}
+
+// cleanupStaleHtpasswd removes htpasswd files that were incorrectly placed in sites-enabled.
+func (s *Service) cleanupStaleHtpasswd() {
+	entries, err := os.ReadDir(s.sitesDir)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".htpasswd") {
+			old := filepath.Join(s.sitesDir, e.Name())
+			slog.Info("removing stale htpasswd from sites-enabled", "file", old)
+			os.Remove(old)
+		}
+	}
 }
 
 func (s *Service) removeHtpasswd(domain string) {
