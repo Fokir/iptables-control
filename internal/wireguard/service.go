@@ -239,14 +239,18 @@ func (s *Service) UpdatePeer(id int64, req UpdatePeerRequest) (*Peer, error) {
 }
 
 // DeletePeer removes a peer.
+// For imported peers, only removes from DB (config is managed externally).
+// For created peers, removes from both DB and wg0.conf.
 func (s *Service) DeletePeer(id int64) error {
 	peer, err := s.repo.GetByID(id)
 	if err != nil {
 		return fmt.Errorf("peer not found: %w", err)
 	}
 
-	if err := s.engine.RemovePeer(peer.Name); err != nil {
-		return fmt.Errorf("remove from wireguard: %w", err)
+	if !peer.Imported {
+		if err := s.engine.RemovePeer(peer.Name); err != nil {
+			return fmt.Errorf("remove from wireguard: %w", err)
+		}
 	}
 
 	if err := s.repo.Delete(id); err != nil {

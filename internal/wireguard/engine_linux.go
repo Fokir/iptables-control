@@ -200,8 +200,8 @@ func (e *Engine) AddPeer(name, publicKey, presharedKey, allowedIPs string) error
 		return fmt.Errorf("write peer block: %w", err)
 	}
 
-	// Apply live without restarting
-	if err := e.syncConf(); err != nil {
+	// Apply live: add peer via wg set
+	if err := e.addPeerLive(publicKey, presharedKey, allowedIPs); err != nil {
 		return err
 	}
 
@@ -216,15 +216,35 @@ func (e *Engine) RemovePeer(name string) error {
 		return fmt.Errorf("read config: %w", err)
 	}
 
-	re := regexp.MustCompile(`(?ms)\n?# BEGIN_PEER ` + regexp.QuoteMeta(name) + `\n.*?# END_PEER ` + regexp.QuoteMeta(name) + `\n?`)
-	newData := re.ReplaceAll(data, []byte("\n"))
+	// Find the public key before removing from config
+	peerRe := regexp.MustCompile(`(?ms)# BEGIN_PEER ` + regexp.QuoteMeta(name) + `\n(.*?)# END_PEER ` + regexp.QuoteMeta(name))
+	match := peerRe.FindStringSubmatch(string(data))
+	var publicKey string
+	if match != nil {
+		for _, line := range strings.Split(match[1], "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "PublicKey") {
+				parts := strings.SplitN(line, "=", 2)
+				if len(parts) == 2 {
+					publicKey = strings.TrimSpace(parts[1])
+				}
+			}
+		}
+	}
+
+	// Remove from config file
+	removeRe := regexp.MustCompile(`(?ms)\n?# BEGIN_PEER ` + regexp.QuoteMeta(name) + `\n.*?# END_PEER ` + regexp.QuoteMeta(name) + `\n?`)
+	newData := removeRe.ReplaceAll(data, []byte("\n"))
 
 	if err := os.WriteFile(wgConfPath, newData, 0600); err != nil {
 		return fmt.Errorf("write config: %w", err)
 	}
 
-	if err := e.syncConf(); err != nil {
-		return err
+	// Remove peer live via wg set
+	if publicKey != "" {
+		if err := e.removePeerLive(publicKey); err != nil {
+			slog.Error("failed to remove peer live", "name", name, "error", err)
+		}
 	}
 
 	slog.Info("wireguard peer removed", "name", name)
@@ -248,7 +268,11 @@ func (e *Engine) UpdatePeerInConfig(oldName, newName, publicKey, presharedKey, a
 		return fmt.Errorf("write config: %w", err)
 	}
 
-	if err := e.syncConf(); err != nil {
+	// Remove old peer and add updated one live
+	if err := e.removePeerLive(publicKey); err != nil {
+		slog.Error("failed to remove old peer live", "error", err)
+	}
+	if err := e.addPeerLive(publicKey, presharedKey, allowedIPs); err != nil {
 		return err
 	}
 
@@ -390,63 +414,39 @@ func (e *Engine) ParseExistingPeers() ([]ParsedPeer, error) {
 	return peers, nil
 }
 
-// syncConf applies the current config without restarting the interface.
-func (e *Engine) syncConf() error {
-	// Strip the interface-level config and create a temp file for wg syncconf
-	data, err := os.ReadFile(wgConfPath)
+// addPeerLive adds a peer to the running WireGuard interface using wg set.
+func (e *Engine) addPeerLive(publicKey, presharedKey, allowedIPs string) error {
+	// wg set requires preshared-key via file descriptor
+	tmpPsk, err := os.CreateTemp("", "wg-psk-*")
 	if err != nil {
-		return fmt.Errorf("read config: %w", err)
+		return fmt.Errorf("create psk temp file: %w", err)
 	}
+	defer os.Remove(tmpPsk.Name())
 
-	// wg syncconf needs only the [Peer] sections
-	var peerSections []string
-	lines := strings.Split(string(data), "\n")
-	inPeer := false
-	var current []string
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "[Peer]" {
-			inPeer = true
-			current = []string{line}
-			continue
-		}
-		if trimmed == "[Interface]" {
-			if inPeer && len(current) > 0 {
-				peerSections = append(peerSections, strings.Join(current, "\n"))
-			}
-			inPeer = false
-			current = nil
-			continue
-		}
-		if inPeer {
-			// Skip comment lines in peer sections for syncconf
-			if strings.HasPrefix(trimmed, "#") {
-				continue
-			}
-			current = append(current, line)
-		}
+	if _, err := tmpPsk.WriteString(presharedKey); err != nil {
+		tmpPsk.Close()
+		return fmt.Errorf("write psk: %w", err)
 	}
-	if inPeer && len(current) > 0 {
-		peerSections = append(peerSections, strings.Join(current, "\n"))
-	}
+	tmpPsk.Close()
 
-	tmpFile, err := os.CreateTemp("", "wg-syncconf-*.conf")
+	out, err := exec.Command("wg", "set", wgInterface,
+		"peer", publicKey,
+		"preshared-key", tmpPsk.Name(),
+		"allowed-ips", allowedIPs,
+	).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("create temp file: %w", err)
+		return fmt.Errorf("wg set add peer: %s: %w", string(out), err)
 	}
-	defer os.Remove(tmpFile.Name())
+	return nil
+}
 
-	content := strings.Join(peerSections, "\n\n")
-	if _, err := tmpFile.WriteString(content); err != nil {
-		tmpFile.Close()
-		return fmt.Errorf("write temp file: %w", err)
-	}
-	tmpFile.Close()
-
-	out, err := exec.Command("wg", "syncconf", wgInterface, tmpFile.Name()).CombinedOutput()
+// removePeerLive removes a peer from the running WireGuard interface using wg set.
+func (e *Engine) removePeerLive(publicKey string) error {
+	out, err := exec.Command("wg", "set", wgInterface,
+		"peer", publicKey, "remove",
+	).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("wg syncconf: %s: %w", string(out), err)
+		return fmt.Errorf("wg set remove peer: %s: %w", string(out), err)
 	}
-
 	return nil
 }
