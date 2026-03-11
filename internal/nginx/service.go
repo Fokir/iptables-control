@@ -298,7 +298,7 @@ func (s *Service) writeHtpasswd(domain *Domain) error {
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
 	}
-	line := fmt.Sprintf("%s:{CRYPT}%s\n", domain.BasicAuthUser, string(hash))
+	line := fmt.Sprintf("%s:%s\n", domain.BasicAuthUser, string(hash))
 	return os.WriteFile(s.htpasswdPath(domain.Domain), []byte(line), 0644)
 }
 
