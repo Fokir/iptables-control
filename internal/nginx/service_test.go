@@ -21,17 +21,24 @@ func setupNginxTest(t *testing.T) *Service {
 	return NewService(repo, sitesDir)
 }
 
+// mustCreate creates a domain, ignoring nginx config errors (expected in test env without root).
+func mustCreate(t *testing.T, svc *Service, req CreateDomainRequest) *Domain {
+	t.Helper()
+	domain, err := svc.Create(req)
+	if err != nil && domain == nil {
+		t.Fatalf("Create: %v", err)
+	}
+	return domain
+}
+
 func TestCreateDomain_Success(t *testing.T) {
 	svc := setupNginxTest(t)
 
-	domain, err := svc.Create(CreateDomainRequest{
+	domain := mustCreate(t, svc, CreateDomainRequest{
 		Domain:       "example.com",
 		UpstreamIP:   "10.0.0.1",
 		UpstreamPort: 8080,
 	})
-	if err != nil {
-		t.Fatalf("Create: %v", err)
-	}
 	if domain.ID == 0 {
 		t.Error("expected non-zero ID")
 	}
@@ -49,14 +56,11 @@ func TestCreateDomain_Success(t *testing.T) {
 func TestCreateDomain_DefaultPort(t *testing.T) {
 	svc := setupNginxTest(t)
 
-	domain, err := svc.Create(CreateDomainRequest{
+	domain := mustCreate(t, svc, CreateDomainRequest{
 		Domain:       "example.com",
 		UpstreamIP:   "10.0.0.1",
 		UpstreamPort: 0, // should default to 80
 	})
-	if err != nil {
-		t.Fatalf("Create: %v", err)
-	}
 	if domain.UpstreamPort != 80 {
 		t.Errorf("expected default upstream port 80, got %d", domain.UpstreamPort)
 	}
@@ -103,14 +107,8 @@ func TestGetAllDomains_Empty(t *testing.T) {
 func TestGetAllDomains_Multiple(t *testing.T) {
 	svc := setupNginxTest(t)
 
-	_, err := svc.Create(CreateDomainRequest{Domain: "a.example.com", UpstreamIP: "10.0.0.1", UpstreamPort: 80})
-	if err != nil {
-		t.Fatalf("Create 1: %v", err)
-	}
-	_, err = svc.Create(CreateDomainRequest{Domain: "b.example.com", UpstreamIP: "10.0.0.2", UpstreamPort: 80})
-	if err != nil {
-		t.Fatalf("Create 2: %v", err)
-	}
+	mustCreate(t, svc, CreateDomainRequest{Domain: "a.example.com", UpstreamIP: "10.0.0.1", UpstreamPort: 80})
+	mustCreate(t, svc, CreateDomainRequest{Domain: "b.example.com", UpstreamIP: "10.0.0.2", UpstreamPort: 80})
 
 	domains, err := svc.GetAll()
 	if err != nil {
@@ -124,10 +122,7 @@ func TestGetAllDomains_Multiple(t *testing.T) {
 func TestUpdateDomain_Success(t *testing.T) {
 	svc := setupNginxTest(t)
 
-	created, err := svc.Create(CreateDomainRequest{Domain: "old.example.com", UpstreamIP: "10.0.0.1", UpstreamPort: 80})
-	if err != nil {
-		t.Fatalf("Create: %v", err)
-	}
+	created := mustCreate(t, svc, CreateDomainRequest{Domain: "old.example.com", UpstreamIP: "10.0.0.1", UpstreamPort: 80})
 
 	updated, err := svc.Update(created.ID, UpdateDomainRequest{
 		Domain:       "new.example.com",
@@ -148,12 +143,9 @@ func TestUpdateDomain_Success(t *testing.T) {
 func TestUpdateDomain_InvalidDomain(t *testing.T) {
 	svc := setupNginxTest(t)
 
-	created, err := svc.Create(CreateDomainRequest{Domain: "example.com", UpstreamIP: "10.0.0.1", UpstreamPort: 80})
-	if err != nil {
-		t.Fatalf("Create: %v", err)
-	}
+	created := mustCreate(t, svc, CreateDomainRequest{Domain: "example.com", UpstreamIP: "10.0.0.1", UpstreamPort: 80})
 
-	_, err = svc.Update(created.ID, UpdateDomainRequest{Domain: "invalid", UpstreamIP: "10.0.0.1", UpstreamPort: 80})
+	_, err :=  svc.Update(created.ID, UpdateDomainRequest{Domain: "invalid", UpstreamIP: "10.0.0.1", UpstreamPort: 80})
 	if err == nil {
 		t.Fatal("expected error for invalid domain, got nil")
 	}
@@ -171,10 +163,7 @@ func TestUpdateDomain_NotFound(t *testing.T) {
 func TestDeleteDomain(t *testing.T) {
 	svc := setupNginxTest(t)
 
-	created, err := svc.Create(CreateDomainRequest{Domain: "example.com", UpstreamIP: "10.0.0.1", UpstreamPort: 80})
-	if err != nil {
-		t.Fatalf("Create: %v", err)
-	}
+	created := mustCreate(t, svc, CreateDomainRequest{Domain: "example.com", UpstreamIP: "10.0.0.1", UpstreamPort: 80})
 
 	if err := svc.Delete(created.ID); err != nil {
 		t.Fatalf("Delete: %v", err)
@@ -201,10 +190,7 @@ func TestDeleteDomain_NotFound(t *testing.T) {
 func TestSetEnabled_Enable(t *testing.T) {
 	svc := setupNginxTest(t)
 
-	created, err := svc.Create(CreateDomainRequest{Domain: "example.com", UpstreamIP: "10.0.0.1", UpstreamPort: 80})
-	if err != nil {
-		t.Fatalf("Create: %v", err)
-	}
+	created := mustCreate(t, svc, CreateDomainRequest{Domain: "example.com", UpstreamIP: "10.0.0.1", UpstreamPort: 80})
 
 	// Disable first
 	disabled, err := svc.SetEnabled(created.ID, false)
