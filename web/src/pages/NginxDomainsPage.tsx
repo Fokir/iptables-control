@@ -8,6 +8,8 @@ import { Input } from '../components/ui/Input'
 import { IpInput } from '../components/ui/IpInput'
 import { Modal } from '../components/ui/Modal'
 import { Toggle } from '../components/ui/Toggle'
+import { PageHeader } from '../components/layout/PageHeader'
+import { IpWithNodeName } from '../components/ui/IpWithNodeName'
 
 export function NginxDomainsPage() {
   const queryClient = useQueryClient()
@@ -126,105 +128,118 @@ export function NginxDomainsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold">Nginx Domains</h2>
+      <PageHeader title="Nginx Domains">
         <Button size="sm" onClick={() => setShowForm(true)}>
           <Plus size={16} className="mr-1.5" /> Add Domain
         </Button>
-      </div>
+      </PageHeader>
 
       {isLoading ? (
         <p className="text-slate-400">Loading...</p>
       ) : domains.length === 0 && externalDomains.length === 0 ? (
         <p className="text-slate-500">No domains configured.</p>
       ) : (
-        <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-700 text-slate-400">
-                <th className="text-left p-3 font-medium">Status</th>
-                <th className="text-left p-3 font-medium">Domain</th>
-                <th className="text-left p-3 font-medium">Upstream</th>
-                <th className="text-left p-3 font-medium">Auth</th>
-                <th className="text-left p-3 font-medium">SSL</th>
-                <th className="p-3 w-24"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {domains.map(d => (
-                <tr key={`managed-${d.id}`} className="border-b border-slate-700/50 last:border-0">
-                  <td className="p-3">
-                    <Toggle checked={d.enabled} onChange={enabled => toggleMut.mutate({ id: d.id, enabled })} />
-                  </td>
-                  <td className="p-3 text-slate-200 font-mono">{d.domain}</td>
-                  <td className="p-3 text-slate-300 font-mono">{d.upstreamScheme || 'http'}://{d.upstreamIp}:{d.upstreamPort}</td>
-                  <td className="p-3">
-                    {d.basicAuthUser ? (
-                      <span className="text-blue-400 flex items-center gap-1"><Lock size={14} /> {d.basicAuthUser}</span>
-                    ) : (
-                      <span className="text-slate-500">-</span>
-                    )}
-                  </td>
-                  <td className="p-3">
-                    {d.sslEnabled ? (
-                      <span className="text-green-400 flex items-center gap-1"><Shield size={14} /> Active</span>
-                    ) : (
-                      <button
-                        onClick={() => setSslDomainId(d.id)}
-                        className="text-slate-400 hover:text-yellow-400 flex items-center gap-1 text-sm transition-colors"
-                      >
-                        <ShieldOff size={14} /> Enable SSL
-                      </button>
-                    )}
-                  </td>
-                  <td className="p-3 text-right flex justify-end gap-2">
-                    <button onClick={() => openEdit(d)} className="text-slate-400 hover:text-blue-400 transition-colors">
-                      <Pencil size={16} />
-                    </button>
-                    <button onClick={() => deleteMut.mutate(d.id)} className="text-slate-400 hover:text-red-400 transition-colors">
-                      <Trash2 size={16} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {externalDomains.map(d => (
-                <tr key={`ext-${d.filename}`} className="border-b border-slate-700/50 last:border-0 bg-slate-800/50">
-                  <td className="p-3">
-                    <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
-                      <ExternalLink size={12} /> External
-                    </span>
-                  </td>
-                  <td className="p-3 text-slate-200 font-mono">{d.domain}</td>
-                  <td className="p-3 text-slate-300 font-mono">
-                    {d.upstreamIp && d.upstreamPort ? `${d.upstreamIp}:${d.upstreamPort}` : <span className="text-slate-500">unknown</span>}
-                  </td>
-                  <td className="p-3">
-                    {d.hasBasicAuth ? (
-                      <span className="text-blue-400 flex items-center gap-1"><Lock size={14} /> Yes</span>
-                    ) : (
-                      <span className="text-slate-500">-</span>
-                    )}
-                  </td>
-                  <td className="p-3">
-                    {d.sslEnabled ? (
-                      <span className="text-green-400 flex items-center gap-1"><Shield size={14} /> Active</span>
-                    ) : (
-                      <span className="text-slate-500">-</span>
-                    )}
-                  </td>
-                  <td className="p-3 text-right">
+        <div className="space-y-4">
+          {domains.map(d => (
+            <div key={`managed-${d.id}`} className="bg-slate-800 rounded-xl border border-slate-700 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <Toggle checked={d.enabled} onChange={enabled => toggleMut.mutate({ id: d.id, enabled })} />
+                  <h3 className="font-semibold text-lg font-mono">{d.domain}</h3>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => openEdit(d)} className="text-slate-400 hover:text-blue-400 transition-colors">
+                    <Pencil size={16} />
+                  </button>
+                  <button onClick={() => deleteMut.mutate(d.id)} className="text-slate-400 hover:text-red-400 transition-colors">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                <div>
+                  <span className="text-slate-500">Upstream</span>
+                  <p className="text-slate-200">
+                    <span className="font-mono">{d.upstreamScheme || 'http'}://</span>
+                    <IpWithNodeName ip={d.upstreamIp} />
+                    <span className="font-mono">:{d.upstreamPort}</span>
+                  </p>
+                </div>
+                <div>
+                  <span className="text-slate-500">Auth</span>
+                  {d.basicAuthUser ? (
+                    <p className="text-blue-400 flex items-center gap-1"><Lock size={14} /> {d.basicAuthUser}</p>
+                  ) : (
+                    <p className="text-slate-500">—</p>
+                  )}
+                </div>
+                <div>
+                  <span className="text-slate-500">SSL</span>
+                  {d.sslEnabled ? (
+                    <p className="text-green-400 flex items-center gap-1"><Shield size={14} /> Active</p>
+                  ) : (
                     <button
-                      onClick={() => setImportFilename(d.filename)}
-                      className="text-slate-400 hover:text-emerald-400 transition-colors"
-                      title="Import to managed"
+                      onClick={() => setSslDomainId(d.id)}
+                      className="text-slate-400 hover:text-yellow-400 flex items-center gap-1 text-sm transition-colors"
                     >
-                      <Download size={16} />
+                      <ShieldOff size={14} /> Enable SSL
                     </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {externalDomains.map(d => (
+            <div key={`ext-${d.filename}`} className="bg-slate-800/50 rounded-xl border border-slate-700 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
+                    <ExternalLink size={12} /> External
+                  </span>
+                  <h3 className="font-semibold text-lg font-mono">{d.domain}</h3>
+                </div>
+                <button
+                  onClick={() => setImportFilename(d.filename)}
+                  className="text-slate-400 hover:text-emerald-400 transition-colors"
+                  title="Import to managed"
+                >
+                  <Download size={16} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+                <div>
+                  <span className="text-slate-500">Upstream</span>
+                  {d.upstreamIp && d.upstreamPort ? (
+                    <p className="text-slate-200">
+                      <IpWithNodeName ip={d.upstreamIp} />
+                      <span className="font-mono">:{d.upstreamPort}</span>
+                    </p>
+                  ) : (
+                    <p className="text-slate-500">unknown</p>
+                  )}
+                </div>
+                <div>
+                  <span className="text-slate-500">Auth</span>
+                  {d.hasBasicAuth ? (
+                    <p className="text-blue-400 flex items-center gap-1"><Lock size={14} /> Yes</p>
+                  ) : (
+                    <p className="text-slate-500">—</p>
+                  )}
+                </div>
+                <div>
+                  <span className="text-slate-500">SSL</span>
+                  {d.sslEnabled ? (
+                    <p className="text-green-400 flex items-center gap-1"><Shield size={14} /> Active</p>
+                  ) : (
+                    <p className="text-slate-500">—</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 

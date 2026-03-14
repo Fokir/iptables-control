@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { TrafficSeries } from '../types'
 import { TrafficChart } from '../components/traffic/TrafficChart'
+import { PageHeader } from '../components/layout/PageHeader'
 
 const intervals = [
   { value: '1m', label: '1 min' },
@@ -36,8 +37,7 @@ export function TrafficPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold">Traffic Statistics</h2>
+      <PageHeader title="Traffic Statistics">
         <div className="flex gap-1 bg-slate-800 rounded-lg p-1">
           {intervals.map(({ value, label }) => (
             <button
@@ -53,7 +53,7 @@ export function TrafficPage() {
             </button>
           ))}
         </div>
-      </div>
+      </PageHeader>
 
       {/* Network Nodes */}
       <section className="mb-8">

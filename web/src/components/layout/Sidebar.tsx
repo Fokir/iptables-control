@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Network, Globe, Server, ScrollText, LogOut, BarChart3, Shield } from 'lucide-react'
+import { Network, Globe, Server, ScrollText, LogOut, BarChart3, Shield, X } from 'lucide-react'
 import { api } from '../../api/client'
 
 const links = [
@@ -11,7 +11,11 @@ const links = [
   { to: '/logs', label: 'Audit Log', icon: ScrollText },
 ]
 
-export function Sidebar() {
+interface Props {
+  onClose?: () => void
+}
+
+export function Sidebar({ onClose }: Props) {
   const navigate = useNavigate()
 
   const handleLogout = async () => {
@@ -24,8 +28,13 @@ export function Sidebar() {
 
   return (
     <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col min-h-screen">
-      <div className="p-4 border-b border-slate-800">
+      <div className="p-4 border-b border-slate-800 flex items-center justify-between">
         <h1 className="text-lg font-bold text-blue-400">System Control</h1>
+        {onClose && (
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-200 transition-colors md:hidden">
+            <X size={20} />
+          </button>
+        )}
       </div>
 
       <nav className="flex-1 p-3 space-y-1">
@@ -34,6 +43,7 @@ export function Sidebar() {
             key={to}
             to={to}
             end={to === '/'}
+            onClick={onClose}
             className={({ isActive }) =>
               `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
                 isActive

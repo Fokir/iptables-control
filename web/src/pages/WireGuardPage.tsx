@@ -6,6 +6,7 @@ import type { WireguardStatus, WireguardPeer, WireguardPeerConfig } from '../typ
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Modal } from '../components/ui/Modal'
+import { PageHeader } from '../components/layout/PageHeader'
 
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
@@ -37,7 +38,6 @@ export function WireGuardPage() {
   const [editPeer, setEditPeer] = useState<WireguardPeer | null>(null)
   const [editForm, setEditForm] = useState({ name: '', dns: '', allowedIps: '' })
 
-  // Enable form
   const [showEnableForm, setShowEnableForm] = useState(false)
   const [enableEndpoint, setEnableEndpoint] = useState('')
   const [enablePort, setEnablePort] = useState('51820')
@@ -163,14 +163,9 @@ export function WireGuardPage() {
   }
 
   const handleEnable = () => {
-    if (status?.running) {
-      // Already configured, just start
-      enableMut.mutate({ endpoint: '', listenPort: 0, address: '' })
-    } else if (status?.installed) {
-      // Installed but not running, start
+    if (status?.running || status?.installed) {
       enableMut.mutate({ endpoint: '', listenPort: 0, address: '' })
     } else {
-      // Need initial setup
       setShowEnableForm(true)
     }
   }
@@ -181,46 +176,44 @@ export function WireGuardPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <h2 className="text-xl font-semibold">WireGuard</h2>
-          {status?.running ? (
+      <PageHeader title="WireGuard">
+        {status?.running ? (
+          <>
             <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-400 bg-green-400/10 px-2.5 py-1 rounded-full">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
               Running
             </span>
-          ) : status?.installed ? (
+            <Button size="sm" variant="ghost" onClick={() => disableMut.mutate()} loading={disableMut.isPending}>
+              <ShieldOff size={16} className="mr-1.5" /> Stop
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => syncMut.mutate()} loading={syncMut.isPending}>
+              <RefreshCw size={16} className="mr-1.5" /> Sync
+            </Button>
+            <Button size="sm" onClick={() => setShowAddForm(true)}>
+              <Plus size={16} className="mr-1.5" /> Add Peer
+            </Button>
+          </>
+        ) : status?.installed ? (
+          <>
             <span className="inline-flex items-center gap-1.5 text-xs font-medium text-yellow-400 bg-yellow-400/10 px-2.5 py-1 rounded-full">
               Stopped
             </span>
-          ) : (
+            <Button size="sm" onClick={handleEnable} loading={enableMut.isPending}>
+              <Shield size={16} className="mr-1.5" /> Start
+            </Button>
+          </>
+        ) : (
+          <>
             <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 bg-slate-400/10 px-2.5 py-1 rounded-full">
               Not installed
             </span>
-          )}
-        </div>
-        <div className="flex gap-2">
-          {status?.running ? (
-            <>
-              <Button size="sm" variant="ghost" onClick={() => disableMut.mutate()} loading={disableMut.isPending}>
-                <ShieldOff size={16} className="mr-1.5" /> Stop
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => syncMut.mutate()} loading={syncMut.isPending}>
-                <RefreshCw size={16} className="mr-1.5" /> Sync
-              </Button>
-              <Button size="sm" onClick={() => setShowAddForm(true)}>
-                <Plus size={16} className="mr-1.5" /> Add Peer
-              </Button>
-            </>
-          ) : (
             <Button size="sm" onClick={handleEnable} loading={enableMut.isPending}>
-              <Shield size={16} className="mr-1.5" /> Enable WireGuard
+              <Shield size={16} className="mr-1.5" /> Enable
             </Button>
-          )}
-        </div>
-      </div>
+          </>
+        )}
+      </PageHeader>
 
-      {/* Server info */}
       {status?.running && (
         <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 mb-6">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
@@ -244,109 +237,89 @@ export function WireGuardPage() {
         </div>
       )}
 
-      {/* Peers table */}
       {status?.running && (
         peersLoading ? (
           <p className="text-slate-400">Loading peers...</p>
         ) : peers.length === 0 ? (
           <p className="text-slate-500">No peers configured.</p>
         ) : (
-          <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-700 text-slate-400">
-                  <th className="text-left p-3 font-medium">Name</th>
-                  <th className="text-left p-3 font-medium">Address</th>
-                  <th className="text-left p-3 font-medium">Status</th>
-                  <th className="text-left p-3 font-medium">Transfer</th>
-                  <th className="p-3 w-36"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {peers.map(p => {
-                  const isOnline = p.latestHandshake && (Date.now() / 1000 - parseInt(p.latestHandshake)) < 180
-                  return (
-                    <tr key={p.id} className="border-b border-slate-700/50 last:border-0">
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <span className="text-slate-200 font-medium">{p.name}</span>
-                          {p.imported && (
-                            <span className="text-xs font-medium text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">
-                              Imported
-                            </span>
-                          )}
-                        </div>
-                        <span className="text-slate-500 text-xs block font-mono mt-0.5">{p.publicKey.slice(0, 20)}...</span>
-                      </td>
-                      <td className="p-3 text-slate-300 font-mono">{p.address}</td>
-                      <td className="p-3">
-                        {isOnline ? (
-                          <span className="inline-flex items-center gap-1.5 text-green-400">
-                            <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                            {formatHandshake(p.latestHandshake)}
-                          </span>
-                        ) : (
-                          <span className="text-slate-500">
-                            {p.latestHandshake ? formatHandshake(p.latestHandshake) : 'Never connected'}
-                          </span>
-                        )}
-                        {p.endpoint && <span className="text-slate-500 text-xs block font-mono mt-0.5">{p.endpoint}</span>}
-                      </td>
-                      <td className="p-3 text-slate-400 text-xs">
-                        {(p.transferRx || p.transferTx) ? (
-                          <>
-                            <span className="text-green-400/70">↓{formatBytes(p.transferRx || 0)}</span>
-                            {' / '}
-                            <span className="text-blue-400/70">↑{formatBytes(p.transferTx || 0)}</span>
-                          </>
-                        ) : '-'}
-                      </td>
-                      <td className="p-3 text-right">
-                        <div className="flex justify-end gap-1.5">
-                          {!p.imported && (
-                            <>
-                              <button
-                                onClick={() => setConfigPeer(p)}
-                                className="text-slate-400 hover:text-blue-400 transition-colors p-1"
-                                title="Download config"
-                              >
-                                <Download size={15} />
-                              </button>
-                              <button
-                                onClick={() => handleShowQR(p.id)}
-                                className="text-slate-400 hover:text-purple-400 transition-colors p-1"
-                                title="QR Code"
-                              >
-                                <QrCode size={15} />
-                              </button>
-                            </>
-                          )}
-                          <button
-                            onClick={() => openEdit(p)}
-                            className="text-slate-400 hover:text-blue-400 transition-colors p-1"
-                            title="Edit"
-                          >
-                            <Pencil size={15} />
+          <div className="space-y-4">
+            {peers.map(p => {
+              const isOnline = p.latestHandshake && (Date.now() / 1000 - parseInt(p.latestHandshake)) < 180
+              return (
+                <div key={p.id} className="bg-slate-800 rounded-xl border border-slate-700 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      {isOnline ? (
+                        <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                      ) : (
+                        <span className="w-2 h-2 rounded-full bg-slate-600" />
+                      )}
+                      <h3 className="font-semibold text-lg">{p.name}</h3>
+                      {p.imported && (
+                        <span className="text-xs font-medium text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded">
+                          Imported
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex gap-1.5">
+                      {!p.imported && (
+                        <>
+                          <button onClick={() => setConfigPeer(p)} className="text-slate-400 hover:text-blue-400 transition-colors p-1" title="Download config">
+                            <Download size={15} />
                           </button>
-                          <button
-                            onClick={() => deleteMut.mutate(p.id)}
-                            className="text-slate-400 hover:text-red-400 transition-colors p-1"
-                            title="Delete"
-                          >
-                            <Trash2 size={15} />
+                          <button onClick={() => handleShowQR(p.id)} className="text-slate-400 hover:text-purple-400 transition-colors p-1" title="QR Code">
+                            <QrCode size={15} />
                           </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+                        </>
+                      )}
+                      <button onClick={() => openEdit(p)} className="text-slate-400 hover:text-blue-400 transition-colors p-1" title="Edit">
+                        <Pencil size={15} />
+                      </button>
+                      <button onClick={() => deleteMut.mutate(p.id)} className="text-slate-400 hover:text-red-400 transition-colors p-1" title="Delete">
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <span className="text-slate-500">Address</span>
+                      <p className="text-slate-200 font-mono">{p.address}</p>
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Status</span>
+                      {isOnline ? (
+                        <p className="text-green-400">{formatHandshake(p.latestHandshake)}</p>
+                      ) : (
+                        <p className="text-slate-500">{p.latestHandshake ? formatHandshake(p.latestHandshake) : 'Never connected'}</p>
+                      )}
+                      {p.endpoint && <p className="text-slate-500 text-xs font-mono mt-0.5">{p.endpoint}</p>}
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Transfer</span>
+                      {(p.transferRx || p.transferTx) ? (
+                        <p className="text-xs">
+                          <span className="text-green-400/70">↓{formatBytes(p.transferRx || 0)}</span>
+                          {' / '}
+                          <span className="text-blue-400/70">↑{formatBytes(p.transferTx || 0)}</span>
+                        </p>
+                      ) : (
+                        <p className="text-slate-500">—</p>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-slate-500">Public Key</span>
+                      <p className="text-slate-400 font-mono text-xs break-all">{p.publicKey.slice(0, 20)}...</p>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )
       )}
 
-      {/* Enable WireGuard form */}
       <Modal open={showEnableForm} onClose={() => setShowEnableForm(false)} title="Enable WireGuard">
         <form onSubmit={e => { e.preventDefault(); enableMut.mutate({ endpoint: enableEndpoint, listenPort: +enablePort, address: enableAddress }) }} className="space-y-4">
           <Input label="Server Endpoint (public IP)" placeholder="212.193.55.91" value={enableEndpoint} onChange={e => setEnableEndpoint(e.target.value)} required />
@@ -360,7 +333,6 @@ export function WireGuardPage() {
         </form>
       </Modal>
 
-      {/* Add peer modal */}
       <Modal open={showAddForm} onClose={() => setShowAddForm(false)} title="Add Peer">
         <form onSubmit={e => { e.preventDefault(); createMut.mutate() }} className="space-y-4">
           <Input label="Name" placeholder="my-device" value={peerName} onChange={e => setPeerName(e.target.value)} required />
@@ -374,7 +346,6 @@ export function WireGuardPage() {
         </form>
       </Modal>
 
-      {/* Edit peer modal */}
       <Modal open={editPeer !== null} onClose={() => setEditPeer(null)} title="Edit Peer">
         <form onSubmit={e => { e.preventDefault(); updateMut.mutate() }} className="space-y-4">
           <Input label="Name" value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} required />
@@ -388,7 +359,6 @@ export function WireGuardPage() {
         </form>
       </Modal>
 
-      {/* Config modal */}
       <Modal open={configPeer !== null} onClose={() => { setConfigPeer(null); setCopied(false) }} title={`Config: ${configPeer?.name}`}>
         <div className="space-y-4">
           {peerConfig ? (
@@ -412,7 +382,6 @@ export function WireGuardPage() {
         </div>
       </Modal>
 
-      {/* QR code modal */}
       <Modal open={qrPeer !== null} onClose={() => { setQrPeer(null); setQrData(null) }} title="QR Code">
         <div className="flex justify-center p-4">
           {qrData ? (

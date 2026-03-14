@@ -7,6 +7,7 @@ import { Button } from '../components/ui/Button'
 import { GroupCard } from '../components/nat/GroupCard'
 import { GroupForm } from '../components/nat/GroupForm'
 import { Modal } from '../components/ui/Modal'
+import { PageHeader } from '../components/layout/PageHeader'
 
 export function NatRulesPage() {
   const queryClient = useQueryClient()
@@ -60,17 +61,14 @@ export function NatRulesPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold">NAT Rules</h2>
-        <div className="flex gap-2">
-          <Button variant="ghost" size="sm" onClick={() => syncMut.mutate()} loading={syncMut.isPending}>
-            <RefreshCw size={16} className="mr-1.5" /> Sync
-          </Button>
-          <Button size="sm" onClick={openNew}>
-            <Plus size={16} className="mr-1.5" /> Add Group
-          </Button>
-        </div>
-      </div>
+      <PageHeader title="NAT Rules">
+        <Button variant="ghost" size="sm" onClick={() => syncMut.mutate()} loading={syncMut.isPending}>
+          <RefreshCw size={16} className="mr-1.5" /> Sync
+        </Button>
+        <Button size="sm" onClick={openNew}>
+          <Plus size={16} className="mr-1.5" /> Add Group
+        </Button>
+      </PageHeader>
 
       {isLoading ? (
         <p className="text-slate-400">Loading...</p>

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '../api/client'
 import type { AuditLogResult } from '../types'
 import { Button } from '../components/ui/Button'
+import { PageHeader } from '../components/layout/PageHeader'
 
 export function AuditLogPage() {
   const [page, setPage] = useState(1)
@@ -22,7 +23,7 @@ export function AuditLogPage() {
 
   return (
     <div>
-      <h2 className="text-xl font-semibold mb-6">Audit Log</h2>
+      <PageHeader title="Audit Log" />
 
       {isLoading ? (
         <p className="text-slate-400">Loading...</p>
