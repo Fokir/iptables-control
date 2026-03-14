@@ -214,6 +214,10 @@ func (s *Service) SetEnabled(id int64, enabled bool) (*Domain, error) {
 }
 
 func (s *Service) RequestSSL(id int64, email string) error {
+	if err := validate.Email(email); err != nil {
+		return fmt.Errorf("email: %w", err)
+	}
+
 	domain, err := s.repo.GetByID(id)
 	if err != nil {
 		return fmt.Errorf("domain not found: %w", err)
@@ -388,9 +392,8 @@ func (s *Service) ImportExternal(filename string) (*Domain, error) {
 		return nil, fmt.Errorf("import is only supported on Linux")
 	}
 
-	// Validate filename to prevent path traversal
-	if strings.Contains(filename, "/") || strings.Contains(filename, "\\") || strings.Contains(filename, "..") {
-		return nil, fmt.Errorf("invalid filename")
+	if err := validate.Filename(filename); err != nil {
+		return nil, err
 	}
 
 	srcPath := filepath.Join(s.sitesDir, filename)

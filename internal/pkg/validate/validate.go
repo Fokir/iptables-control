@@ -3,6 +3,8 @@ package validate
 import (
 	"fmt"
 	"net"
+	"net/mail"
+	"path/filepath"
 	"regexp"
 )
 
@@ -32,6 +34,28 @@ func Domain(domain string) error {
 func Required(field, value string) error {
 	if value == "" {
 		return fmt.Errorf("%s is required", field)
+	}
+	return nil
+}
+
+func Email(email string) error {
+	if email == "" {
+		return fmt.Errorf("email is required")
+	}
+	_, err := mail.ParseAddress(email)
+	if err != nil {
+		return fmt.Errorf("invalid email address: %s", email)
+	}
+	return nil
+}
+
+func Filename(name string) error {
+	if name == "" {
+		return fmt.Errorf("filename is required")
+	}
+	cleaned := filepath.Clean(name)
+	if cleaned != name || filepath.IsAbs(name) || cleaned == ".." || cleaned == "." {
+		return fmt.Errorf("invalid filename")
 	}
 	return nil
 }

@@ -32,7 +32,7 @@ func (s *Service) EnsureAdminUser(username, password string) error {
 		return nil
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
 	}
@@ -46,10 +46,20 @@ func (s *Service) EnsureAdminUser(username, password string) error {
 	return nil
 }
 
+// dummyHash is a pre-computed bcrypt hash used to prevent timing attacks.
+// When a user is not found, we still run bcrypt comparison against this hash
+// so the response time is consistent regardless of whether the user exists.
+var dummyHash = func() []byte {
+	h, _ := bcrypt.GenerateFromPassword([]byte("dummy-timing-attack-prevention"), 12)
+	return h
+}()
+
 func (s *Service) Login(username, password string) (*Session, *User, error) {
 	user, err := s.repo.GetUserByUsername(username)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			// Constant-time: always run bcrypt even if user doesn't exist
+			bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
 			return nil, nil, fmt.Errorf("invalid credentials")
 		}
 		return nil, nil, fmt.Errorf("get user: %w", err)

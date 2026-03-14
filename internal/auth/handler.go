@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -9,10 +10,11 @@ import (
 
 type Handler struct {
 	svc *Service
+	rl  *RateLimiter
 }
 
 func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+	return &Handler{svc: svc, rl: NewRateLimiter()}
 }
 
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
@@ -27,17 +29,30 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	ip := r.RemoteAddr
+
+	if !h.rl.Allow(ip) {
+		slog.Warn("login rate limit exceeded", "ip", ip, "username", req.Username)
+		httputil.Error(w, http.StatusTooManyRequests, "too many login attempts, try again later")
+		return
+	}
+
 	session, user, err := h.svc.Login(req.Username, req.Password)
 	if err != nil {
+		slog.Warn("login failed", "ip", ip, "username", req.Username)
 		httputil.Error(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
+
+	h.rl.Reset(ip)
+	slog.Info("login successful", "ip", ip, "username", req.Username)
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session",
 		Value:    session.ID,
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   int(time.Until(session.ExpiresAt).Seconds()),
 	})
@@ -56,6 +71,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
+		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   -1,
 	})
