@@ -147,6 +147,9 @@ func main() {
 	// Serve frontend SPA
 	r.Handle("/*", spaHandler())
 
+	// Wire traffic collector as node change listener
+	nodesSvc.SetNodeChangeListener(trafficCollector)
+
 	// Start node monitoring
 	nodesMonitor.Start()
 

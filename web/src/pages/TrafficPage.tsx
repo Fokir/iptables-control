@@ -37,27 +37,28 @@ export function TrafficPage() {
 
   return (
     <div>
-      <PageHeader title="Traffic Statistics">
-        <div className="flex gap-1 bg-slate-800 rounded-lg p-1">
-          {intervals.map(({ value, label }) => (
-            <button
-              key={value}
-              onClick={() => setInterval(value)}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                interval === value
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </PageHeader>
+      <PageHeader title="Traffic Statistics" />
 
       {/* Network Nodes */}
       <section className="mb-8">
-        <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-4">Network Nodes</h3>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <h3 className="text-sm font-medium text-slate-400 uppercase tracking-wider">Network Nodes</h3>
+          <div className="flex gap-1 bg-slate-800 rounded-lg p-1 self-start sm:self-auto">
+            {intervals.map(({ value, label }) => (
+              <button
+                key={value}
+                onClick={() => setInterval(value)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                  interval === value
+                    ? 'bg-blue-600 text-white'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
         {nodesLoading ? (
           <p className="text-slate-400">Loading...</p>
         ) : nodeSeries.length === 0 ? (

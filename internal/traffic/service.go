@@ -23,13 +23,57 @@ type intervalConfig struct {
 	bucketSeconds int
 }
 
+// rawRetention must match the cutoff in collector.aggregate().
+const rawRetention = 2 * time.Hour
+
 var intervals = map[string]intervalConfig{
 	"1m":  {duration: 1 * time.Minute, useRaw: true},
 	"5m":  {duration: 5 * time.Minute, useRaw: true},
-	"30m": {duration: 30 * time.Minute, bucketSeconds: 300},
-	"1h":  {duration: 1 * time.Hour, bucketSeconds: 300},
-	"1d":  {duration: 24 * time.Hour, bucketSeconds: 3600},
-	"1w":  {duration: 7 * 24 * time.Hour, bucketSeconds: 86400},
+	"30m": {duration: 30 * time.Minute, useRaw: true},
+	"1h":  {duration: 1 * time.Hour, useRaw: true},
+	"1d":  {duration: 24 * time.Hour, bucketSeconds: 300},
+	"1w":  {duration: 7 * 24 * time.Hour, bucketSeconds: 3600},
+}
+
+// queryPoints fetches traffic data, combining raw and aggregated sources
+// to avoid gaps caused by aggregation lag.
+func (s *Service) queryPoints(nodeID *int64, ifaceName string, cfg intervalConfig) ([]TrafficPoint, error) {
+	now := time.Now().UTC()
+	from := now.Add(-cfg.duration)
+
+	if cfg.useRaw {
+		return s.repo.QueryRaw(nodeID, ifaceName, from, now)
+	}
+
+	// For longer intervals: raw covers the recent window that hasn't been
+	// aggregated yet, aggregated covers the older portion.
+	rawBoundary := now.Add(-rawRetention)
+	var allPoints []TrafficPoint
+
+	// Aggregated data for the older portion
+	if from.Before(rawBoundary) {
+		aggPoints, err := s.repo.QueryAggregated(nodeID, ifaceName, from, rawBoundary, cfg.bucketSeconds)
+		if err != nil {
+			return nil, err
+		}
+		allPoints = append(allPoints, aggPoints...)
+	}
+
+	// Raw data for the recent portion
+	rawFrom := rawBoundary
+	if from.After(rawBoundary) {
+		rawFrom = from
+	}
+	rawPoints, err := s.repo.QueryRaw(nodeID, ifaceName, rawFrom, now)
+	if err != nil {
+		return nil, err
+	}
+	allPoints = append(allPoints, rawPoints...)
+
+	if allPoints == nil {
+		allPoints = []TrafficPoint{}
+	}
+	return allPoints, nil
 }
 
 func (s *Service) GetNodeTraffic(nodeID int64, interval string) (*TrafficSeries, error) {
@@ -38,17 +82,7 @@ func (s *Service) GetNodeTraffic(nodeID int64, interval string) (*TrafficSeries,
 		return nil, fmt.Errorf("invalid interval: %s", interval)
 	}
 
-	now := time.Now().UTC()
-	from := now.Add(-cfg.duration)
-
-	var points []TrafficPoint
-	var err error
-
-	if cfg.useRaw {
-		points, err = s.repo.QueryRaw(&nodeID, "", from, now)
-	} else {
-		points, err = s.repo.QueryAggregated(&nodeID, "", from, now, cfg.bucketSeconds)
-	}
+	points, err := s.queryPoints(&nodeID, "", cfg)
 	if err != nil {
 		return nil, fmt.Errorf("query traffic: %w", err)
 	}
@@ -65,17 +99,7 @@ func (s *Service) GetInterfaceTraffic(name, interval string) (*TrafficSeries, er
 		return nil, fmt.Errorf("invalid interval: %s", interval)
 	}
 
-	now := time.Now().UTC()
-	from := now.Add(-cfg.duration)
-
-	var points []TrafficPoint
-	var err error
-
-	if cfg.useRaw {
-		points, err = s.repo.QueryRaw(nil, name, from, now)
-	} else {
-		points, err = s.repo.QueryAggregated(nil, name, from, now, cfg.bucketSeconds)
-	}
+	points, err := s.queryPoints(nil, name, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("query traffic: %w", err)
 	}

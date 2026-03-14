@@ -19,6 +19,8 @@ type Collector struct {
 
 	// Previous counter values for computing deltas
 	prevIface map[string]InterfaceSnapshot
+	prevNode  map[int64]NodeTrafficSnapshot
+	nodesReady bool
 }
 
 func NewCollector(repo *Repository, engine *Engine, nodesRepo *network_nodes.Repository, interfaces []string, interval time.Duration) *Collector {
@@ -30,6 +32,7 @@ func NewCollector(repo *Repository, engine *Engine, nodesRepo *network_nodes.Rep
 		collectInterval: interval,
 		stop:            make(chan struct{}),
 		prevIface:       make(map[string]InterfaceSnapshot),
+		prevNode:        make(map[int64]NodeTrafficSnapshot),
 	}
 }
 
@@ -40,6 +43,7 @@ func (c *Collector) Start() {
 
 func (c *Collector) Stop() {
 	close(c.stop)
+	_ = c.engine.CleanupNodeCounters()
 }
 
 func (c *Collector) collectLoop() {
@@ -83,6 +87,71 @@ func (c *Collector) collect() {
 		}
 		c.prevIface[snap.Name] = snap
 	}
+
+	// Setup node counters on first run
+	if !c.nodesReady {
+		c.setupNodes()
+	}
+
+	// Collect node counters
+	if c.nodesReady {
+		c.collectNodes(now)
+	}
+}
+
+func (c *Collector) setupNodes() {
+	nodes, err := c.nodesRepo.GetAll()
+	if err != nil {
+		slog.Error("traffic: failed to get nodes for counter setup", "error", err)
+		return
+	}
+
+	infos := make([]NodeInfo, len(nodes))
+	for i, n := range nodes {
+		infos[i] = NodeInfo{ID: n.ID, IP: n.IP}
+	}
+
+	if err := c.engine.SetupNodeCounters(infos); err != nil {
+		slog.Error("traffic: failed to setup node counters", "error", err)
+		return
+	}
+
+	c.nodesReady = true
+	c.prevNode = make(map[int64]NodeTrafficSnapshot)
+}
+
+func (c *Collector) collectNodes(now time.Time) {
+	nodeSnaps, err := c.engine.CollectNodeCounters()
+	if err != nil {
+		slog.Error("traffic: failed to collect node counters", "error", err)
+		return
+	}
+
+	for _, snap := range nodeSnaps {
+		prev, exists := c.prevNode[snap.NodeID]
+		if exists && snap.BytesIn >= prev.BytesIn && snap.BytesOut >= prev.BytesOut {
+			deltaIn := int64(snap.BytesIn - prev.BytesIn)
+			deltaOut := int64(snap.BytesOut - prev.BytesOut)
+			if deltaIn > 0 || deltaOut > 0 {
+				nodeID := snap.NodeID
+				if err := c.repo.InsertRaw(&nodeID, "", deltaIn, deltaOut, now); err != nil {
+					slog.Error("traffic: failed to insert node data", "nodeId", snap.NodeID, "error", err)
+				}
+			}
+		}
+		c.prevNode[snap.NodeID] = snap
+	}
+}
+
+// RefreshNodes re-creates nftables counter rules for current nodes.
+// Called when nodes are added, updated, or deleted.
+func (c *Collector) RefreshNodes() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.nodesReady = false
+	c.prevNode = make(map[int64]NodeTrafficSnapshot)
+	c.setupNodes()
 }
 
 func (c *Collector) aggregateLoop() {

@@ -27,7 +27,7 @@ export function Sidebar({ onClose }: Props) {
   }
 
   return (
-    <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col min-h-screen">
+    <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col h-screen sticky top-0 overflow-y-auto">
       <div className="p-4 border-b border-slate-800 flex items-center justify-between">
         <h1 className="text-lg font-bold text-blue-400">System Control</h1>
         {onClose && (

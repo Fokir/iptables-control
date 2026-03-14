@@ -6,13 +6,30 @@ import (
 	"github.com/sokol/system-control/internal/pkg/validate"
 )
 
+// NodeChangeListener is notified when nodes are created, updated, or deleted.
+type NodeChangeListener interface {
+	RefreshNodes()
+}
+
 type Service struct {
-	repo    *Repository
-	monitor *Monitor
+	repo     *Repository
+	monitor  *Monitor
+	listener NodeChangeListener
 }
 
 func NewService(repo *Repository, monitor *Monitor) *Service {
 	return &Service{repo: repo, monitor: monitor}
+}
+
+// SetNodeChangeListener registers a listener for node changes.
+func (s *Service) SetNodeChangeListener(l NodeChangeListener) {
+	s.listener = l
+}
+
+func (s *Service) notifyChange() {
+	if s.listener != nil {
+		go s.listener.RefreshNodes()
+	}
 }
 
 func (s *Service) GetStatuses() []NodeStatus {
@@ -35,6 +52,7 @@ func (s *Service) Create(req CreateNodeRequest) (*NetworkNode, error) {
 	if err := s.repo.Create(node); err != nil {
 		return nil, fmt.Errorf("create node: %w", err)
 	}
+	s.notifyChange()
 	return node, nil
 }
 
@@ -50,9 +68,14 @@ func (s *Service) Update(id int64, req UpdateNodeRequest) (*NetworkNode, error) 
 	if err := s.repo.Update(node); err != nil {
 		return nil, fmt.Errorf("update node: %w", err)
 	}
+	s.notifyChange()
 	return node, nil
 }
 
 func (s *Service) Delete(id int64) error {
-	return s.repo.Delete(id)
+	if err := s.repo.Delete(id); err != nil {
+		return err
+	}
+	s.notifyChange()
+	return nil
 }

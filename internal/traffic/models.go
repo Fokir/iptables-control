@@ -30,3 +30,9 @@ type NodeTrafficSnapshot struct {
 	BytesIn  uint64
 	BytesOut uint64
 }
+
+// NodeInfo is a lightweight struct for setting up node counters.
+type NodeInfo struct {
+	ID int64
+	IP string
+}
