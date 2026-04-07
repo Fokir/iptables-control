@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Shield, ShieldOff, Lock, Download, ExternalLink, Pencil } from 'lucide-react'
+import { Plus, Trash2, Shield, ShieldOff, Lock, Download, ExternalLink, Pencil, Palette } from 'lucide-react'
 import { api } from '../api/client'
 import type { NginxDomain, ExternalNginxDomain, NetworkNode } from '../types'
 import { Button } from '../components/ui/Button'
@@ -19,13 +19,17 @@ export function NginxDomainsPage() {
   const [upstreamPort, setUpstreamPort] = useState('80')
   const [upstreamScheme, setUpstreamScheme] = useState('http')
   const [upstreamSslVerify, setUpstreamSslVerify] = useState(true)
-  const [basicAuthUser, setBasicAuthUser] = useState('')
-  const [basicAuthPassword, setBasicAuthPassword] = useState('')
+  const [authEnabled, setAuthEnabled] = useState(false)
+  const [authUsername, setAuthUsername] = useState('')
+  const [authPassword, setAuthPassword] = useState('')
+  const [authCookieMaxAge, setAuthCookieMaxAge] = useState('30')
   const [sslEmail, setSslEmail] = useState('')
   const [sslDomainId, setSslDomainId] = useState<number | null>(null)
   const [importFilename, setImportFilename] = useState<string | null>(null)
   const [editDomain, setEditDomain] = useState<NginxDomain | null>(null)
-  const [editForm, setEditForm] = useState({ domain: '', upstreamIp: '', upstreamPort: '80', upstreamScheme: 'http', upstreamSslVerify: true, basicAuthUser: '', basicAuthPassword: '' })
+  const [editForm, setEditForm] = useState({ domain: '', upstreamIp: '', upstreamPort: '80', upstreamScheme: 'http', upstreamSslVerify: true, authEnabled: false, authUsername: '', authPassword: '', authCookieMaxAge: '30' })
+  const [cssDomain, setCssDomain] = useState<NginxDomain | null>(null)
+  const [cssValue, setCssValue] = useState('')
 
   const { data: domains = [], isLoading } = useQuery({
     queryKey: ['nginx-domains'],
@@ -51,8 +55,10 @@ export function NginxDomainsPage() {
       upstreamPort: +upstreamPort,
       upstreamScheme,
       upstreamSslVerify,
-      basicAuthUser: basicAuthUser || undefined,
-      basicAuthPassword: basicAuthPassword || undefined,
+      authEnabled,
+      authUsername: authEnabled ? authUsername : undefined,
+      authPassword: authEnabled ? authPassword : undefined,
+      authCookieMaxAge: authEnabled ? +authCookieMaxAge * 86400 : undefined,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['nginx-domains'] })
@@ -62,8 +68,10 @@ export function NginxDomainsPage() {
       setUpstreamPort('80')
       setUpstreamScheme('http')
       setUpstreamSslVerify(true)
-      setBasicAuthUser('')
-      setBasicAuthPassword('')
+      setAuthEnabled(false)
+      setAuthUsername('')
+      setAuthPassword('')
+      setAuthCookieMaxAge('30')
     },
   })
 
@@ -95,12 +103,30 @@ export function NginxDomainsPage() {
       upstreamPort: +editForm.upstreamPort,
       upstreamScheme: editForm.upstreamScheme,
       upstreamSslVerify: editForm.upstreamSslVerify,
-      basicAuthUser: editForm.basicAuthUser || undefined,
-      basicAuthPassword: editForm.basicAuthPassword || undefined,
+      authEnabled: editForm.authEnabled,
+      authUsername: editForm.authEnabled ? editForm.authUsername : undefined,
+      authPassword: editForm.authEnabled ? editForm.authPassword || undefined : undefined,
+      authCookieMaxAge: editForm.authEnabled ? +editForm.authCookieMaxAge * 86400 : undefined,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['nginx-domains'] })
       setEditDomain(null)
+    },
+  })
+
+  const cssMut = useMutation({
+    mutationFn: () => api.put(`/api/nginx-domains/${cssDomain!.id}`, {
+      domain: cssDomain!.domain,
+      upstreamIp: cssDomain!.upstreamIp,
+      upstreamPort: cssDomain!.upstreamPort,
+      upstreamScheme: cssDomain!.upstreamScheme,
+      upstreamSslVerify: cssDomain!.upstreamSslVerify,
+      authEnabled: cssDomain!.authEnabled,
+      authLoginCss: cssValue,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['nginx-domains'] })
+      setCssDomain(null)
     },
   })
 
@@ -111,10 +137,17 @@ export function NginxDomainsPage() {
       upstreamPort: String(d.upstreamPort),
       upstreamScheme: d.upstreamScheme || 'http',
       upstreamSslVerify: d.upstreamSslVerify,
-      basicAuthUser: d.basicAuthUser || '',
-      basicAuthPassword: '',
+      authEnabled: d.authEnabled,
+      authUsername: d.authUsername || '',
+      authPassword: '',
+      authCookieMaxAge: String(Math.round((d.authCookieMaxAge || 2592000) / 86400)),
     })
     setEditDomain(d)
+  }
+
+  const openCssEditor = (d: NginxDomain) => {
+    setCssValue(d.authLoginCss || '')
+    setCssDomain(d)
   }
 
   const importMut = useMutation({
@@ -148,6 +181,11 @@ export function NginxDomainsPage() {
                   <h3 className="font-semibold text-lg font-mono">{d.domain}</h3>
                 </div>
                 <div className="flex gap-2">
+                  {d.authEnabled && (
+                    <button onClick={() => openCssEditor(d)} className="text-slate-400 hover:text-purple-400 transition-colors" title="Login page style">
+                      <Palette size={16} />
+                    </button>
+                  )}
                   <button onClick={() => openEdit(d)} className="text-slate-400 hover:text-blue-400 transition-colors">
                     <Pencil size={16} />
                   </button>
@@ -168,8 +206,8 @@ export function NginxDomainsPage() {
                 </div>
                 <div>
                   <span className="text-slate-500">Auth</span>
-                  {d.basicAuthUser ? (
-                    <p className="text-blue-400 flex items-center gap-1"><Lock size={14} /> {d.basicAuthUser}</p>
+                  {d.authEnabled ? (
+                    <p className="text-blue-400 flex items-center gap-1"><Lock size={14} /> {d.authUsername || 'Cookie'} ({Math.round((d.authCookieMaxAge || 2592000) / 86400)}d)</p>
                   ) : (
                     <p className="text-slate-500">—</p>
                   )}
@@ -288,11 +326,17 @@ export function NginxDomainsPage() {
             </label>
           )}
           <div className="border-t border-slate-700 pt-4">
-            <p className="text-sm text-slate-400 mb-3">Basic Auth (optional)</p>
-            <div className="space-y-3">
-              <Input label="Username" placeholder="admin" value={basicAuthUser} onChange={e => setBasicAuthUser(e.target.value)} />
-              <Input label="Password" type="password" placeholder="password" value={basicAuthPassword} onChange={e => setBasicAuthPassword(e.target.value)} />
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm text-slate-400">Cookie Auth (optional)</p>
+              <Toggle checked={authEnabled} onChange={setAuthEnabled} />
             </div>
+            {authEnabled && (
+              <div className="space-y-3">
+                <Input label="Username" placeholder="admin" value={authUsername} onChange={e => setAuthUsername(e.target.value)} required />
+                <Input label="Password" type="password" placeholder="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} required />
+                <Input label="Cookie lifetime (days)" type="number" value={authCookieMaxAge} onChange={e => setAuthCookieMaxAge(e.target.value)} />
+              </div>
+            )}
           </div>
           {createMut.error && <p className="text-sm text-red-400">{createMut.error.message}</p>}
           <div className="flex justify-end gap-2">
@@ -347,11 +391,17 @@ export function NginxDomainsPage() {
             </label>
           )}
           <div className="border-t border-slate-700 pt-4">
-            <p className="text-sm text-slate-400 mb-3">Basic Auth (optional, leave password empty to keep current)</p>
-            <div className="space-y-3">
-              <Input label="Username" placeholder="admin" value={editForm.basicAuthUser} onChange={e => setEditForm(f => ({ ...f, basicAuthUser: e.target.value }))} />
-              <Input label="Password" type="password" placeholder="new password" value={editForm.basicAuthPassword} onChange={e => setEditForm(f => ({ ...f, basicAuthPassword: e.target.value }))} />
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm text-slate-400">Cookie Auth</p>
+              <Toggle checked={editForm.authEnabled} onChange={v => setEditForm(f => ({ ...f, authEnabled: v }))} />
             </div>
+            {editForm.authEnabled && (
+              <div className="space-y-3">
+                <Input label="Username" placeholder="admin" value={editForm.authUsername} onChange={e => setEditForm(f => ({ ...f, authUsername: e.target.value }))} required />
+                <Input label="Password" type="password" placeholder="leave empty to keep current" value={editForm.authPassword} onChange={e => setEditForm(f => ({ ...f, authPassword: e.target.value }))} />
+                <Input label="Cookie lifetime (days)" type="number" value={editForm.authCookieMaxAge} onChange={e => setEditForm(f => ({ ...f, authCookieMaxAge: e.target.value }))} />
+              </div>
+            )}
           </div>
           {updateMut.error && <p className="text-sm text-red-400">{updateMut.error.message}</p>}
           <div className="flex justify-end gap-2">
@@ -359,6 +409,36 @@ export function NginxDomainsPage() {
             <Button type="submit" loading={updateMut.isPending}>Save</Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal open={cssDomain !== null} onClose={() => setCssDomain(null)} title="Login Page Style">
+        <div className="space-y-4">
+          <p className="text-sm text-slate-400">
+            Custom CSS for the login page of <span className="font-mono text-slate-200">{cssDomain?.domain}</span>.
+            Leave empty to use the default style.
+          </p>
+          <div className="flex flex-col gap-1">
+            <label className="text-sm text-slate-400">Custom CSS</label>
+            <textarea
+              value={cssValue}
+              onChange={e => setCssValue(e.target.value)}
+              rows={12}
+              placeholder={`:root {\n  --bg: #0f172a;\n  --card-bg: #1e293b;\n  --border: #334155;\n  --text: #e2e8f0;\n  --primary: #3b82f6;\n  --primary-hover: #2563eb;\n  --error: #ef4444;\n  --radius: 12px;\n}`}
+              className="w-full bg-slate-900 border border-slate-600 rounded-lg px-3 py-2 text-slate-100 text-sm font-mono resize-y"
+            />
+          </div>
+          <p className="text-xs text-slate-500">
+            Override CSS variables (--bg, --card-bg, --border, --text, --primary, --primary-hover, --error, --radius) or write full custom CSS.
+          </p>
+          {cssMut.error && <p className="text-sm text-red-400">{cssMut.error.message}</p>}
+          <div className="flex justify-between">
+            <Button variant="ghost" type="button" onClick={() => setCssValue('')}>Reset to Default</Button>
+            <div className="flex gap-2">
+              <Button variant="ghost" type="button" onClick={() => setCssDomain(null)}>Cancel</Button>
+              <Button onClick={() => cssMut.mutate()} loading={cssMut.isPending}>Save</Button>
+            </div>
+          </div>
+        </div>
       </Modal>
 
       <Modal open={sslDomainId !== null} onClose={() => setSslDomainId(null)} title="Enable SSL (Let's Encrypt)">
@@ -380,9 +460,6 @@ export function NginxDomainsPage() {
           <p className="text-sm text-slate-400">
             A backup of the original config will be created (<span className="font-mono">.bak</span>).
             The config will be regenerated using the standard template.
-          </p>
-          <p className="text-sm text-yellow-400/80">
-            Note: Basic Auth credentials cannot be imported. You can set them after import.
           </p>
           {importMut.error && <p className="text-sm text-red-400">{importMut.error.message}</p>}
           <div className="flex justify-end gap-2">

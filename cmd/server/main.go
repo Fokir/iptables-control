@@ -66,7 +66,7 @@ func main() {
 	natSvc := nftables.NewService(natRepo, natEngine)
 	nodesMonitor := network_nodes.NewMonitor(nodesRepo, 30*time.Second)
 	nodesSvc := network_nodes.NewService(nodesRepo, nodesMonitor)
-	nginxSvc := nginx.NewService(nginxRepo, cfg.NginxSitesDir)
+	nginxSvc := nginx.NewService(nginxRepo, cfg.NginxSitesDir, cfg.Port)
 	auditSvc := audit.NewService(auditRepo)
 	trafficSvc := traffic.NewService(trafficRepo, nodesRepo)
 	wgEngine := wireguard.NewEngine()
@@ -113,6 +113,7 @@ func main() {
 	natHandler := nftables.NewHandler(natSvc)
 	nodesHandler := network_nodes.NewHandler(nodesSvc)
 	nginxHandler := nginx.NewHandler(nginxSvc)
+	nginxAuthHandler := nginx.NewAuthHandler(nginxRepo)
 	auditHandler := audit.NewHandler(auditSvc)
 	trafficHandler := traffic.NewHandler(trafficSvc)
 	wgHandler := wireguard.NewHandler(wgSvc)
@@ -128,6 +129,7 @@ func main() {
 	r.Route("/api", func(r chi.Router) {
 		// Public
 		r.Post("/auth/login", authHandler.Login)
+		r.Mount("/domain-auth", nginxAuthHandler.Routes())
 
 		// Protected
 		r.Group(func(r chi.Router) {

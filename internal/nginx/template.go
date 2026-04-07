@@ -10,10 +10,30 @@ server {
     listen 80;
     server_name {{.Domain}};
 
+{{- if .HasAuth}}
+    # Cookie-based auth via system-control
+    location = /_sc_auth_verify {
+        internal;
+        proxy_pass http://127.0.0.1:{{.BackendPort}}/api/domain-auth/verify;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header X-Original-Host $host;
+        proxy_set_header X-Original-URI $request_uri;
+        proxy_set_header Cookie $http_cookie;
+    }
+
+    location /_sc_auth/ {
+        proxy_pass http://127.0.0.1:{{.BackendPort}}/api/domain-auth/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Original-Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+{{- end}}
+
     location / {
-{{- if .HasBasicAuth}}
-        auth_basic "Restricted";
-        auth_basic_user_file {{.HtpasswdPath}};
+{{- if .HasAuth}}
+        auth_request /_sc_auth_verify;
+        error_page 401 = @login_redirect;
 {{- end}}
         proxy_pass {{.UpstreamScheme}}://{{.UpstreamIP}}:{{.UpstreamPort}};
 {{- if not .UpstreamSSLVerify}}
@@ -33,22 +53,28 @@ server {
         proxy_connect_timeout 60s;
         proxy_buffering off;
     }
+
+{{- if .HasAuth}}
+    location @login_redirect {
+        return 302 $scheme://$host/_sc_auth/login?domain=$host&redirect=$scheme://$host$request_uri;
+    }
+{{- end}}
 }
 `
 
 var confTmpl = template.Must(template.New("nginx").Parse(nginxConfTemplate))
 
 type configData struct {
-	Domain           string
-	UpstreamIP       string
-	UpstreamPort     int
-	UpstreamScheme   string
+	Domain            string
+	UpstreamIP        string
+	UpstreamPort      int
+	UpstreamScheme    string
 	UpstreamSSLVerify bool
-	HasBasicAuth     bool
-	HtpasswdPath     string
+	HasAuth           bool
+	BackendPort       int
 }
 
-func renderConfig(d *Domain, htpasswdPath string) ([]byte, error) {
+func renderConfig(d *Domain, backendPort int) ([]byte, error) {
 	scheme := d.UpstreamScheme
 	if scheme == "" {
 		scheme = "http"
@@ -59,8 +85,8 @@ func renderConfig(d *Domain, htpasswdPath string) ([]byte, error) {
 		UpstreamPort:      d.UpstreamPort,
 		UpstreamScheme:    scheme,
 		UpstreamSSLVerify: d.UpstreamSSLVerify,
-		HasBasicAuth:      d.BasicAuthUser != "" && d.BasicAuthPassword != "",
-		HtpasswdPath:      htpasswdPath,
+		HasAuth:           d.AuthEnabled,
+		BackendPort:       backendPort,
 	}
 	var buf bytes.Buffer
 	if err := confTmpl.Execute(&buf, data); err != nil {

@@ -18,7 +18,7 @@ func setupNginxTest(t *testing.T) *Service {
 
 	sitesDir := t.TempDir()
 	repo := NewRepository(db)
-	return NewService(repo, sitesDir)
+	return NewService(repo, sitesDir, 8080)
 }
 
 // mustCreate creates a domain, ignoring nginx config errors (expected in test env without root).

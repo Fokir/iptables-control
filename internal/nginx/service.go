@@ -16,12 +16,13 @@ import (
 )
 
 type Service struct {
-	repo     *Repository
-	sitesDir string
+	repo        *Repository
+	sitesDir    string
+	backendPort int
 }
 
-func NewService(repo *Repository, sitesDir string) *Service {
-	return &Service{repo: repo, sitesDir: sitesDir}
+func NewService(repo *Repository, sitesDir string, backendPort int) *Service {
+	return &Service{repo: repo, sitesDir: sitesDir, backendPort: backendPort}
 }
 
 func (s *Service) GetAll() ([]Domain, error) {
@@ -29,32 +30,78 @@ func (s *Service) GetAll() ([]Domain, error) {
 }
 
 // SyncConfigs writes nginx configs for all enabled domains that are missing on disk.
+// It also migrates legacy basic auth domains to cookie auth.
 func (s *Service) SyncConfigs() error {
-	if runtime.GOOS != "linux" {
-		return nil
-	}
-
-	// Migrate: remove stale htpasswd files from sites-enabled (they belong in htpasswd dir)
-	s.cleanupStaleHtpasswd()
-
 	domains, err := s.repo.GetAll()
 	if err != nil {
 		return fmt.Errorf("get domains: %w", err)
 	}
 
-	for _, d := range domains {
-		if !d.Enabled {
+	for i := range domains {
+		d := &domains[i]
+
+		// Migrate: generate missing cookie secret for auth-enabled domains
+		if d.AuthEnabled && d.AuthCookieSecret == "" {
+			secret, err := generateCookieSecret()
+			if err != nil {
+				slog.Error("failed to generate cookie secret", "error", err, "domain", d.Domain)
+				continue
+			}
+			d.AuthCookieSecret = secret
+
+			// If password hash doesn't look like bcrypt, it's a plain text leftover — re-hash it
+			if d.AuthPasswordHash != "" && !strings.HasPrefix(d.AuthPasswordHash, "$2") {
+				hash, err := bcrypt.GenerateFromPassword([]byte(d.AuthPasswordHash), bcrypt.DefaultCost)
+				if err != nil {
+					slog.Error("failed to hash legacy password", "error", err, "domain", d.Domain)
+					continue
+				}
+				d.AuthPasswordHash = string(hash)
+			}
+
+			if d.AuthCookieMaxAge <= 0 {
+				d.AuthCookieMaxAge = defaultCookieMaxAge
+			}
+
+			if err := s.repo.Update(d); err != nil {
+				slog.Error("failed to update domain after migration", "error", err, "domain", d.Domain)
+				continue
+			}
+			slog.Info("migrated domain to cookie auth", "domain", d.Domain)
+
+			// Force regenerate nginx config to replace auth_basic with auth_request
+			if runtime.GOOS == "linux" && d.Enabled {
+				if err := s.writeAndReload(d); err != nil {
+					slog.Error("failed to regenerate nginx config after migration", "error", err, "domain", d.Domain)
+				}
+			}
+		}
+
+		if runtime.GOOS != "linux" || !d.Enabled {
 			continue
 		}
+
 		path := s.configPath(d.Domain)
 		if _, err := os.Stat(path); err == nil {
 			continue // config already exists
 		}
 		slog.Info("syncing missing nginx config", "domain", d.Domain)
-		if err := s.writeAndReload(&d); err != nil {
+		if err := s.writeAndReload(d); err != nil {
 			slog.Error("failed to sync nginx config", "error", err, "domain", d.Domain)
 		}
 	}
+
+	// Cleanup: remove old htpasswd directory
+	if runtime.GOOS == "linux" {
+		htpasswdDir := filepath.Join(filepath.Dir(s.sitesDir), "htpasswd")
+		if entries, err := os.ReadDir(htpasswdDir); err == nil && len(entries) > 0 {
+			slog.Info("cleaning up legacy htpasswd files", "dir", htpasswdDir)
+			for _, e := range entries {
+				os.Remove(filepath.Join(htpasswdDir, e.Name()))
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -71,8 +118,14 @@ func (s *Service) Create(req CreateDomainRequest) (*Domain, error) {
 	if err := validate.Port(req.UpstreamPort); err != nil {
 		return nil, fmt.Errorf("upstreamPort: %w", err)
 	}
-	if err := validateBasicAuth(req.BasicAuthUser, req.BasicAuthPassword); err != nil {
-		return nil, err
+
+	if req.AuthEnabled {
+		if req.AuthUsername == "" {
+			return nil, fmt.Errorf("auth username is required when auth is enabled")
+		}
+		if req.AuthPassword == "" {
+			return nil, fmt.Errorf("auth password is required when auth is enabled")
+		}
 	}
 
 	scheme := req.UpstreamScheme
@@ -94,9 +147,29 @@ func (s *Service) Create(req CreateDomainRequest) (*Domain, error) {
 		UpstreamPort:      req.UpstreamPort,
 		UpstreamScheme:    scheme,
 		UpstreamSSLVerify: sslVerify,
-		BasicAuthUser:     req.BasicAuthUser,
-		BasicAuthPassword: req.BasicAuthPassword,
+		AuthEnabled:       req.AuthEnabled,
+		AuthUsername:      req.AuthUsername,
+		AuthCookieMaxAge:  req.AuthCookieMaxAge,
+		AuthLoginCSS:      req.AuthLoginCSS,
 		Enabled:           true,
+	}
+
+	if req.AuthEnabled {
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.AuthPassword), bcrypt.DefaultCost)
+		if err != nil {
+			return nil, fmt.Errorf("hash password: %w", err)
+		}
+		domain.AuthPasswordHash = string(hash)
+
+		secret, err := generateCookieSecret()
+		if err != nil {
+			return nil, fmt.Errorf("generate cookie secret: %w", err)
+		}
+		domain.AuthCookieSecret = secret
+	}
+
+	if domain.AuthCookieMaxAge <= 0 {
+		domain.AuthCookieMaxAge = defaultCookieMaxAge // 30 days
 	}
 
 	if err := s.repo.Create(domain); err != nil {
@@ -126,15 +199,6 @@ func (s *Service) Update(id int64, req UpdateDomainRequest) (*Domain, error) {
 		return nil, fmt.Errorf("domain not found: %w", err)
 	}
 
-	// If user is set but password is empty, keep existing password
-	if req.BasicAuthUser != "" && req.BasicAuthPassword == "" && domain.BasicAuthUser == req.BasicAuthUser {
-		req.BasicAuthPassword = domain.BasicAuthPassword
-	}
-
-	if err := validateBasicAuth(req.BasicAuthUser, req.BasicAuthPassword); err != nil {
-		return nil, err
-	}
-
 	scheme := req.UpstreamScheme
 	if scheme == "" {
 		scheme = "http"
@@ -154,8 +218,50 @@ func (s *Service) Update(id int64, req UpdateDomainRequest) (*Domain, error) {
 	domain.UpstreamPort = req.UpstreamPort
 	domain.UpstreamScheme = scheme
 	domain.UpstreamSSLVerify = sslVerify
-	domain.BasicAuthUser = req.BasicAuthUser
-	domain.BasicAuthPassword = req.BasicAuthPassword
+	domain.AuthEnabled = req.AuthEnabled
+	domain.AuthLoginCSS = req.AuthLoginCSS
+
+	if req.AuthUsername != "" {
+		domain.AuthUsername = req.AuthUsername
+	}
+
+	if req.AuthCookieMaxAge > 0 {
+		domain.AuthCookieMaxAge = req.AuthCookieMaxAge
+	}
+
+	if req.AuthEnabled {
+		if domain.AuthUsername == "" {
+			return nil, fmt.Errorf("auth username is required when enabling auth")
+		}
+
+		// If password provided, re-hash and regenerate cookie secret (invalidates old cookies)
+		if req.AuthPassword != "" {
+			hash, err := bcrypt.GenerateFromPassword([]byte(req.AuthPassword), bcrypt.DefaultCost)
+			if err != nil {
+				return nil, fmt.Errorf("hash password: %w", err)
+			}
+			domain.AuthPasswordHash = string(hash)
+
+			secret, err := generateCookieSecret()
+			if err != nil {
+				return nil, fmt.Errorf("generate cookie secret: %w", err)
+			}
+			domain.AuthCookieSecret = secret
+		}
+
+		// Generate secret if not set (e.g. enabling auth on existing domain)
+		if domain.AuthCookieSecret == "" {
+			secret, err := generateCookieSecret()
+			if err != nil {
+				return nil, fmt.Errorf("generate cookie secret: %w", err)
+			}
+			domain.AuthCookieSecret = secret
+		}
+
+		if domain.AuthPasswordHash == "" {
+			return nil, fmt.Errorf("auth password is required when enabling auth")
+		}
+	}
 
 	if err := s.repo.Update(domain); err != nil {
 		return nil, fmt.Errorf("update domain: %w", err)
@@ -164,7 +270,6 @@ func (s *Service) Update(id int64, req UpdateDomainRequest) (*Domain, error) {
 	// Remove old config if domain name changed
 	if oldDomain != domain.Domain {
 		s.removeConfig(oldDomain)
-		s.removeHtpasswd(oldDomain)
 	}
 
 	if domain.Enabled {
@@ -183,7 +288,6 @@ func (s *Service) Delete(id int64) error {
 	}
 
 	s.removeConfig(domain.Domain)
-	s.removeHtpasswd(domain.Domain)
 	s.reloadNginx()
 
 	return s.repo.Delete(id)
@@ -206,7 +310,6 @@ func (s *Service) SetEnabled(id int64, enabled bool) (*Domain, error) {
 		}
 	} else {
 		s.removeConfig(domain.Domain)
-		s.removeHtpasswd(domain.Domain)
 		s.reloadNginx()
 	}
 
@@ -242,33 +345,13 @@ func (s *Service) configPath(domain string) string {
 	return filepath.Join(s.sitesDir, fmt.Sprintf("sc_%s.conf", domain))
 }
 
-func (s *Service) htpasswdDir() string {
-	return filepath.Join(filepath.Dir(s.sitesDir), "htpasswd")
-}
-
-func (s *Service) htpasswdPath(domain string) string {
-	return filepath.Join(s.htpasswdDir(), fmt.Sprintf("sc_%s.htpasswd", domain))
-}
-
 func (s *Service) writeAndReload(domain *Domain) error {
 	if runtime.GOOS != "linux" {
 		slog.Warn("nginx config write skipped on non-Linux", "domain", domain.Domain)
 		return nil
 	}
 
-	hasAuth := domain.BasicAuthUser != "" && domain.BasicAuthPassword != ""
-
-	htpasswdFile := s.htpasswdPath(domain.Domain)
-	if hasAuth {
-		if err := s.writeHtpasswd(domain); err != nil {
-			return fmt.Errorf("write htpasswd: %w", err)
-		}
-	} else {
-		s.removeHtpasswd(domain.Domain)
-		htpasswdFile = ""
-	}
-
-	content, err := renderConfig(domain, htpasswdFile)
+	content, err := renderConfig(domain, s.backendPort)
 	if err != nil {
 		return fmt.Errorf("render config: %w", err)
 	}
@@ -284,9 +367,6 @@ func (s *Service) writeAndReload(domain *Domain) error {
 	if err != nil {
 		// Rollback: remove bad config
 		os.Remove(path)
-		if hasAuth {
-			s.removeHtpasswd(domain.Domain)
-		}
 		return fmt.Errorf("nginx config test failed: %s: %w", string(output), err)
 	}
 
@@ -294,39 +374,8 @@ func (s *Service) writeAndReload(domain *Domain) error {
 	return nil
 }
 
-func (s *Service) writeHtpasswd(domain *Domain) error {
-	if err := os.MkdirAll(s.htpasswdDir(), 0755); err != nil {
-		return fmt.Errorf("create htpasswd dir: %w", err)
-	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(domain.BasicAuthPassword), bcrypt.DefaultCost)
-	if err != nil {
-		return fmt.Errorf("hash password: %w", err)
-	}
-	line := fmt.Sprintf("%s:%s\n", domain.BasicAuthUser, string(hash))
-	return os.WriteFile(s.htpasswdPath(domain.Domain), []byte(line), 0644)
-}
-
 func (s *Service) removeConfig(domain string) {
 	os.Remove(s.configPath(domain))
-}
-
-// cleanupStaleHtpasswd removes htpasswd files that were incorrectly placed in sites-enabled.
-func (s *Service) cleanupStaleHtpasswd() {
-	entries, err := os.ReadDir(s.sitesDir)
-	if err != nil {
-		return
-	}
-	for _, e := range entries {
-		if strings.HasSuffix(e.Name(), ".htpasswd") {
-			old := filepath.Join(s.sitesDir, e.Name())
-			slog.Info("removing stale htpasswd from sites-enabled", "file", old)
-			os.Remove(old)
-		}
-	}
-}
-
-func (s *Service) removeHtpasswd(domain string) {
-	os.Remove(s.htpasswdPath(domain))
 }
 
 func (s *Service) reloadNginx() {
@@ -336,13 +385,6 @@ func (s *Service) reloadNginx() {
 	if err := exec.Command("systemctl", "reload", "nginx").Run(); err != nil {
 		slog.Error("failed to reload nginx", "error", err)
 	}
-}
-
-func validateBasicAuth(user, password string) error {
-	if (user == "") != (password == "") {
-		return fmt.Errorf("basic auth requires both user and password, or neither")
-	}
-	return nil
 }
 
 func (s *Service) ListExternal() ([]ExternalDomain, error) {
@@ -435,6 +477,7 @@ func (s *Service) ImportExternal(filename string) (*Domain, error) {
 		UpstreamScheme:    "http",
 		UpstreamSSLVerify: true,
 		SSLEnabled:        ext.SSLEnabled,
+		AuthCookieMaxAge:  defaultCookieMaxAge,
 		Enabled:           true,
 	}
 

@@ -60,8 +60,10 @@ export interface NginxDomain {
   upstreamSslVerify: boolean
   sslEnabled: boolean
   enabled: boolean
-  basicAuthUser: string
-  basicAuthPassword: string
+  authEnabled: boolean
+  authUsername: string
+  authCookieMaxAge: number
+  authLoginCss: string
   createdAt: string
   updatedAt: string
 }

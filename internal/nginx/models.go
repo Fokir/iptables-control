@@ -11,8 +11,12 @@ type Domain struct {
 	UpstreamSSLVerify bool      `json:"upstreamSslVerify"`
 	SSLEnabled        bool      `json:"sslEnabled"`
 	Enabled           bool      `json:"enabled"`
-	BasicAuthUser     string    `json:"basicAuthUser"`
-	BasicAuthPassword string    `json:"basicAuthPassword"`
+	AuthEnabled       bool      `json:"authEnabled"`
+	AuthUsername      string    `json:"authUsername"`
+	AuthPasswordHash  string    `json:"-"`
+	AuthCookieSecret  string    `json:"-"`
+	AuthCookieMaxAge  int       `json:"authCookieMaxAge"`
+	AuthLoginCSS      string    `json:"authLoginCss"`
 	CreatedAt         time.Time `json:"createdAt"`
 	UpdatedAt         time.Time `json:"updatedAt"`
 }
@@ -23,8 +27,11 @@ type CreateDomainRequest struct {
 	UpstreamPort      int    `json:"upstreamPort"`
 	UpstreamScheme    string `json:"upstreamScheme"`
 	UpstreamSSLVerify *bool  `json:"upstreamSslVerify"`
-	BasicAuthUser     string `json:"basicAuthUser"`
-	BasicAuthPassword string `json:"basicAuthPassword"`
+	AuthEnabled       bool   `json:"authEnabled"`
+	AuthUsername      string `json:"authUsername"`
+	AuthPassword      string `json:"authPassword"`
+	AuthCookieMaxAge  int    `json:"authCookieMaxAge"`
+	AuthLoginCSS      string `json:"authLoginCss"`
 }
 
 type UpdateDomainRequest struct {
@@ -33,6 +40,9 @@ type UpdateDomainRequest struct {
 	UpstreamPort      int    `json:"upstreamPort"`
 	UpstreamScheme    string `json:"upstreamScheme"`
 	UpstreamSSLVerify *bool  `json:"upstreamSslVerify"`
-	BasicAuthUser     string `json:"basicAuthUser"`
-	BasicAuthPassword string `json:"basicAuthPassword"`
+	AuthEnabled       bool   `json:"authEnabled"`
+	AuthUsername      string `json:"authUsername"`
+	AuthPassword      string `json:"authPassword"`
+	AuthCookieMaxAge  int    `json:"authCookieMaxAge"`
+	AuthLoginCSS      string `json:"authLoginCss"`
 }
