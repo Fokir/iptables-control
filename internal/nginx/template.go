@@ -5,11 +5,8 @@ import (
 	"text/template"
 )
 
-const nginxConfTemplate = `# Managed by system-control. Do not edit manually.
-server {
-    listen 80;
-    server_name {{.Domain}};
-
+// locationBlock is a reusable sub-template for proxy location directives.
+const locationBlock = `
 {{- if .HasAuth}}
     # Cookie-based auth via system-control
     location = /_sc_auth_verify {
@@ -58,11 +55,39 @@ server {
     location @login_redirect {
         return 302 $scheme://$host/_sc_auth/login?domain=$host&redirect=$scheme://$host$request_uri;
     }
-{{- end}}
+{{- end}}`
+
+const nginxConfTemplate = `# Managed by system-control. Do not edit manually.
+{{- if .SSLEnabled}}
+server {
+    listen 80;
+    server_name {{.Domain}};
+    return 301 https://$host$request_uri;
 }
+
+server {
+    listen 443 ssl;
+    server_name {{.Domain}};
+
+    ssl_certificate /etc/letsencrypt/live/{{.Domain}}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{.Domain}}/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+{{template "locations" .}}
+}
+{{- else}}
+server {
+    listen 80;
+    server_name {{.Domain}};
+{{template "locations" .}}
+}
+{{- end}}
 `
 
-var confTmpl = template.Must(template.New("nginx").Parse(nginxConfTemplate))
+var confTmpl = template.Must(
+	template.Must(template.New("locations").Parse(locationBlock)).
+		New("nginx").Parse(nginxConfTemplate),
+)
 
 type configData struct {
 	Domain            string
@@ -72,6 +97,7 @@ type configData struct {
 	UpstreamSSLVerify bool
 	HasAuth           bool
 	BackendPort       int
+	SSLEnabled        bool
 }
 
 func renderConfig(d *Domain, backendPort int) ([]byte, error) {
@@ -87,6 +113,7 @@ func renderConfig(d *Domain, backendPort int) ([]byte, error) {
 		UpstreamSSLVerify: d.UpstreamSSLVerify,
 		HasAuth:           d.AuthEnabled,
 		BackendPort:       backendPort,
+		SSLEnabled:        d.SSLEnabled,
 	}
 	var buf bytes.Buffer
 	if err := confTmpl.Execute(&buf, data); err != nil {

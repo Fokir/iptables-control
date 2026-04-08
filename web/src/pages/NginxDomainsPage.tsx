@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Trash2, Shield, ShieldOff, Lock, Download, ExternalLink, Pencil, Palette } from 'lucide-react'
+import { Plus, Trash2, Shield, ShieldOff, Lock, Download, ExternalLink, Pencil, Palette, RefreshCw } from 'lucide-react'
 import { api } from '../api/client'
 import type { NginxDomain, ExternalNginxDomain, NetworkNode } from '../types'
 import { Button } from '../components/ui/Button'
@@ -215,7 +215,16 @@ export function NginxDomainsPage() {
                 <div>
                   <span className="text-slate-500">SSL</span>
                   {d.sslEnabled ? (
-                    <p className="text-green-400 flex items-center gap-1"><Shield size={14} /> Active</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-green-400 flex items-center gap-1"><Shield size={14} /> Active</p>
+                      <button
+                        onClick={() => setSslDomainId(d.id)}
+                        className="text-slate-500 hover:text-yellow-400 transition-colors"
+                        title="Renew certificate"
+                      >
+                        <RefreshCw size={14} />
+                      </button>
+                    </div>
                   ) : (
                     <button
                       onClick={() => setSslDomainId(d.id)}

@@ -40,6 +40,24 @@ func (s *Service) SyncConfigs() error {
 	for i := range domains {
 		d := &domains[i]
 
+		// Sync SSL flag with actual certificate presence on disk
+		if runtime.GOOS == "linux" {
+			certExists := s.sslCertExists(d.Domain)
+			if certExists && !d.SSLEnabled {
+				slog.Info("SSL certificate found on disk, enabling SSL flag", "domain", d.Domain)
+				d.SSLEnabled = true
+				if err := s.repo.Update(d); err != nil {
+					slog.Error("failed to update SSL flag", "error", err, "domain", d.Domain)
+				}
+			} else if !certExists && d.SSLEnabled {
+				slog.Warn("SSL certificate missing on disk, disabling SSL flag", "domain", d.Domain)
+				d.SSLEnabled = false
+				if err := s.repo.Update(d); err != nil {
+					slog.Error("failed to update SSL flag", "error", err, "domain", d.Domain)
+				}
+			}
+		}
+
 		// Migrate: generate missing cookie secret for auth-enabled domains
 		if d.AuthEnabled && d.AuthCookieSecret == "" {
 			secret, err := generateCookieSecret()
@@ -338,7 +356,28 @@ func (s *Service) RequestSSL(id int64, email string) error {
 	}
 
 	domain.SSLEnabled = true
-	return s.repo.Update(domain)
+	if err := s.repo.Update(domain); err != nil {
+		return fmt.Errorf("update domain: %w", err)
+	}
+
+	// Regenerate config with SSL directives from our template
+	if err := s.writeAndReload(domain); err != nil {
+		slog.Error("failed to regenerate nginx config after SSL", "error", err, "domain", domain.Domain)
+	}
+
+	return nil
+}
+
+func (s *Service) sslCertExists(domain string) bool {
+	certPath := fmt.Sprintf("/etc/letsencrypt/live/%s/fullchain.pem", domain)
+	keyPath := fmt.Sprintf("/etc/letsencrypt/live/%s/privkey.pem", domain)
+	if _, err := os.Stat(certPath); err != nil {
+		return false
+	}
+	if _, err := os.Stat(keyPath); err != nil {
+		return false
+	}
+	return true
 }
 
 func (s *Service) configPath(domain string) string {
