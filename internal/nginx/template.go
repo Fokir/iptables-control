@@ -7,6 +7,14 @@ import (
 
 // locationBlock is a reusable sub-template for proxy location directives.
 const locationBlock = `
+    # Determine the real client-facing scheme. When behind a proxy that
+    # terminates TLS (e.g. Cloudflare), the origin connection may be plain
+    # HTTP, so $scheme is unreliable. Trust X-Forwarded-Proto when present;
+    # for direct connections the header is absent and we fall back to $scheme.
+    set $real_scheme $scheme;
+    if ($http_x_forwarded_proto = "https") {
+        set $real_scheme "https";
+    }
 {{- if .HasAuth}}
     # Cookie-based auth via system-control
     location = /_sc_auth_verify {
@@ -39,7 +47,7 @@ const locationBlock = `
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $real_scheme;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -53,7 +61,7 @@ const locationBlock = `
 
 {{- if .HasAuth}}
     location @login_redirect {
-        return 302 $scheme://$host/_sc_auth/login?domain=$host&redirect=$scheme://$host$request_uri;
+        return 302 $real_scheme://$host/_sc_auth/login?domain=$host&redirect=$real_scheme://$host$request_uri;
     }
 {{- end}}`
 
