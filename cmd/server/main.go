@@ -20,6 +20,7 @@ import (
 	"github.com/sokol/system-control/internal/network_nodes"
 	"github.com/sokol/system-control/internal/nftables"
 	"github.com/sokol/system-control/internal/nginx"
+	"github.com/sokol/system-control/internal/settings"
 	"github.com/sokol/system-control/internal/traffic"
 	"github.com/sokol/system-control/internal/wireguard"
 )
@@ -56,6 +57,7 @@ func main() {
 	natRepo := nftables.NewRepository(db)
 	nodesRepo := network_nodes.NewRepository(db)
 	nginxRepo := nginx.NewRepository(db)
+	settingsRepo := settings.NewRepository(db)
 	auditRepo := audit.NewRepository(db)
 	trafficRepo := traffic.NewRepository(db)
 	wgRepo := wireguard.NewRepository(db)
@@ -66,7 +68,9 @@ func main() {
 	natSvc := nftables.NewService(natRepo, natEngine)
 	nodesMonitor := network_nodes.NewMonitor(nodesRepo, 30*time.Second)
 	nodesSvc := network_nodes.NewService(nodesRepo, nodesMonitor)
-	nginxSvc := nginx.NewService(nginxRepo, cfg.NginxSitesDir, cfg.Port)
+	settingsSvc := settings.NewService(settingsRepo)
+	nginxSvc := nginx.NewService(nginxRepo, cfg.NginxSitesDir, cfg.Port, settingsSvc)
+	settingsSvc.SetChangeListener(nginxSvc)
 	auditSvc := audit.NewService(auditRepo)
 	trafficSvc := traffic.NewService(trafficRepo, nodesRepo)
 	wgEngine := wireguard.NewEngine()
@@ -114,6 +118,7 @@ func main() {
 	nodesHandler := network_nodes.NewHandler(nodesSvc)
 	nginxHandler := nginx.NewHandler(nginxSvc)
 	nginxAuthHandler := nginx.NewAuthHandler(nginxRepo)
+	settingsHandler := settings.NewHandler(settingsSvc)
 	auditHandler := audit.NewHandler(auditSvc)
 	trafficHandler := traffic.NewHandler(trafficSvc)
 	wgHandler := wireguard.NewHandler(wgSvc)
@@ -140,6 +145,7 @@ func main() {
 			r.Mount("/nat-groups", natHandler.Routes())
 			r.Mount("/network-nodes", nodesHandler.Routes())
 			r.Mount("/nginx-domains", nginxHandler.Routes())
+			r.Mount("/settings", settingsHandler.Routes())
 			r.Mount("/audit-logs", auditHandler.Routes())
 			r.Mount("/traffic", trafficHandler.Routes())
 			r.Mount("/wireguard", wgHandler.Routes())

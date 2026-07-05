@@ -7,6 +7,10 @@ import (
 	"github.com/sokol/system-control/internal/database"
 )
 
+type stubSettings struct{ forceTLS12 bool }
+
+func (s stubSettings) ForceTLS12() bool { return s.forceTLS12 }
+
 func setupNginxTest(t *testing.T) *Service {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "test.db")
@@ -18,7 +22,7 @@ func setupNginxTest(t *testing.T) *Service {
 
 	sitesDir := t.TempDir()
 	repo := NewRepository(db)
-	return NewService(repo, sitesDir, 8080)
+	return NewService(repo, sitesDir, 8080, stubSettings{})
 }
 
 // mustCreate creates a domain, ignoring nginx config errors (expected in test env without root).
@@ -29,6 +33,22 @@ func mustCreate(t *testing.T, svc *Service, req CreateDomainRequest) *Domain {
 		t.Fatalf("Create: %v", err)
 	}
 	return domain
+}
+
+func TestRebuildTargets(t *testing.T) {
+	domains := []Domain{
+		{Domain: "enabled-ssl.example.com", Enabled: true, SSLEnabled: true},
+		{Domain: "enabled-nossl.example.com", Enabled: true, SSLEnabled: false},
+		{Domain: "disabled-ssl.example.com", Enabled: false, SSLEnabled: true},
+	}
+
+	targets := rebuildTargets(domains)
+	if len(targets) != 1 {
+		t.Fatalf("expected 1 target, got %d", len(targets))
+	}
+	if targets[0].Domain != "enabled-ssl.example.com" {
+		t.Errorf("expected 'enabled-ssl.example.com', got %q", targets[0].Domain)
+	}
 }
 
 func TestCreateDomain_Success(t *testing.T) {

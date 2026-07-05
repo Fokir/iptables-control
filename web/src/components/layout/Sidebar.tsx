@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Network, Globe, Server, ScrollText, LogOut, BarChart3, Shield, X } from 'lucide-react'
+import { Network, Globe, Server, ScrollText, LogOut, BarChart3, Shield, X, Settings } from 'lucide-react'
 import { api } from '../../api/client'
 
 const links = [
@@ -9,6 +9,7 @@ const links = [
   { to: '/wireguard', label: 'WireGuard', icon: Shield },
   { to: '/nginx', label: 'Nginx Domains', icon: Globe },
   { to: '/logs', label: 'Audit Log', icon: ScrollText },
+  { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
 interface Props {

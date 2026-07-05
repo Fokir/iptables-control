@@ -15,14 +15,20 @@ import (
 	"github.com/sokol/system-control/internal/pkg/validate"
 )
 
+// SettingsProvider supplies global settings the nginx config depends on.
+type SettingsProvider interface {
+	ForceTLS12() bool
+}
+
 type Service struct {
 	repo        *Repository
 	sitesDir    string
 	backendPort int
+	settings    SettingsProvider
 }
 
-func NewService(repo *Repository, sitesDir string, backendPort int) *Service {
-	return &Service{repo: repo, sitesDir: sitesDir, backendPort: backendPort}
+func NewService(repo *Repository, sitesDir string, backendPort int, settings SettingsProvider) *Service {
+	return &Service{repo: repo, sitesDir: sitesDir, backendPort: backendPort, settings: settings}
 }
 
 func (s *Service) GetAll() ([]Domain, error) {
@@ -384,18 +390,23 @@ func (s *Service) configPath(domain string) string {
 	return filepath.Join(s.sitesDir, fmt.Sprintf("sc_%s.conf", domain))
 }
 
-func (s *Service) writeAndReload(domain *Domain) error {
+// writeConfig renders and writes the nginx config for a domain and validates
+// it with `nginx -t`, rolling back on test failure (restoring the previous
+// config if one existed, otherwise removing the brand-new file). It does NOT
+// reload nginx — callers reload once they have written all configs.
+func (s *Service) writeConfig(domain *Domain) error {
 	if runtime.GOOS != "linux" {
 		slog.Warn("nginx config write skipped on non-Linux", "domain", domain.Domain)
 		return nil
 	}
 
-	content, err := renderConfig(domain, s.backendPort)
+	content, err := renderConfig(domain, s.backendPort, s.settings.ForceTLS12())
 	if err != nil {
 		return fmt.Errorf("render config: %w", err)
 	}
 
 	path := s.configPath(domain.Domain)
+	prev, prevErr := os.ReadFile(path) // prevErr != nil => no prior config existed
 	if err := os.WriteFile(path, content, 0644); err != nil {
 		return fmt.Errorf("write config file: %w", err)
 	}
@@ -404,13 +415,72 @@ func (s *Service) writeAndReload(domain *Domain) error {
 	cmd := exec.Command("nginx", "-t")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		// Rollback: remove bad config
-		os.Remove(path)
+		// Roll back: restore the previous working config if one existed,
+		// otherwise remove the brand-new (bad) file. Prevents a failed
+		// rebuild from taking an already-online domain offline.
+		if prevErr == nil {
+			if wErr := os.WriteFile(path, prev, 0644); wErr != nil {
+				slog.Error("failed to restore previous nginx config after failed test", "error", wErr, "domain", domain.Domain)
+			}
+		} else {
+			os.Remove(path)
+		}
 		return fmt.Errorf("nginx config test failed: %s: %w", string(output), err)
 	}
 
+	return nil
+}
+
+func (s *Service) writeAndReload(domain *Domain) error {
+	if err := s.writeConfig(domain); err != nil {
+		return err
+	}
 	s.reloadNginx()
 	return nil
+}
+
+// rebuildTargets returns the domains whose nginx config depends on global
+// SSL settings: enabled domains that have SSL. Non-SSL domains are skipped
+// because ForceTLS12 / http2 only affect the SSL server block.
+func rebuildTargets(domains []Domain) []*Domain {
+	var targets []*Domain
+	for i := range domains {
+		d := &domains[i]
+		if d.Enabled && d.SSLEnabled {
+			targets = append(targets, d)
+		}
+	}
+	return targets
+}
+
+// RebuildAll re-renders and reloads nginx configs for all SSL-enabled domains.
+// Used when a global setting (e.g. force TLS 1.2) changes. It reloads nginx once
+// after writing all configs rather than per domain.
+func (s *Service) RebuildAll() error {
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+	domains, err := s.repo.GetAll()
+	if err != nil {
+		return fmt.Errorf("get domains: %w", err)
+	}
+	written := 0
+	for _, d := range rebuildTargets(domains) {
+		if err := s.writeConfig(d); err != nil {
+			slog.Error("failed to rebuild nginx config", "error", err, "domain", d.Domain)
+			continue
+		}
+		written++
+	}
+	if written > 0 {
+		s.reloadNginx()
+	}
+	return nil
+}
+
+// OnSettingsChanged implements settings.ChangeListener: rebuild all configs.
+func (s *Service) OnSettingsChanged() error {
+	return s.RebuildAll()
 }
 
 func (s *Service) removeConfig(domain string) {
