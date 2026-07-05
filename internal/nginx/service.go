@@ -15,14 +15,20 @@ import (
 	"github.com/sokol/system-control/internal/pkg/validate"
 )
 
+// SettingsProvider supplies global settings the nginx config depends on.
+type SettingsProvider interface {
+	ForceTLS12() bool
+}
+
 type Service struct {
 	repo        *Repository
 	sitesDir    string
 	backendPort int
+	settings    SettingsProvider
 }
 
-func NewService(repo *Repository, sitesDir string, backendPort int) *Service {
-	return &Service{repo: repo, sitesDir: sitesDir, backendPort: backendPort}
+func NewService(repo *Repository, sitesDir string, backendPort int, settings SettingsProvider) *Service {
+	return &Service{repo: repo, sitesDir: sitesDir, backendPort: backendPort, settings: settings}
 }
 
 func (s *Service) GetAll() ([]Domain, error) {
@@ -390,7 +396,7 @@ func (s *Service) writeAndReload(domain *Domain) error {
 		return nil
 	}
 
-	content, err := renderConfig(domain, s.backendPort)
+	content, err := renderConfig(domain, s.backendPort, s.settings.ForceTLS12())
 	if err != nil {
 		return fmt.Errorf("render config: %w", err)
 	}
@@ -411,6 +417,33 @@ func (s *Service) writeAndReload(domain *Domain) error {
 
 	s.reloadNginx()
 	return nil
+}
+
+// RebuildAll re-renders and reloads nginx configs for all enabled domains.
+// Used when a global setting (e.g. force TLS 1.2) changes.
+func (s *Service) RebuildAll() error {
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+	domains, err := s.repo.GetAll()
+	if err != nil {
+		return fmt.Errorf("get domains: %w", err)
+	}
+	for i := range domains {
+		d := &domains[i]
+		if !d.Enabled {
+			continue
+		}
+		if err := s.writeAndReload(d); err != nil {
+			slog.Error("failed to rebuild nginx config", "error", err, "domain", d.Domain)
+		}
+	}
+	return nil
+}
+
+// OnSettingsChanged implements settings.ChangeListener: rebuild all configs.
+func (s *Service) OnSettingsChanged() error {
+	return s.RebuildAll()
 }
 
 func (s *Service) removeConfig(domain string) {

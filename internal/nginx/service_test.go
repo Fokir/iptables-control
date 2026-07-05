@@ -7,6 +7,10 @@ import (
 	"github.com/sokol/system-control/internal/database"
 )
 
+type stubSettings struct{ forceTLS12 bool }
+
+func (s stubSettings) ForceTLS12() bool { return s.forceTLS12 }
+
 func setupNginxTest(t *testing.T) *Service {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "test.db")
@@ -18,7 +22,7 @@ func setupNginxTest(t *testing.T) *Service {
 
 	sitesDir := t.TempDir()
 	repo := NewRepository(db)
-	return NewService(repo, sitesDir, 8080)
+	return NewService(repo, sitesDir, 8080, stubSettings{})
 }
 
 // mustCreate creates a domain, ignoring nginx config errors (expected in test env without root).
