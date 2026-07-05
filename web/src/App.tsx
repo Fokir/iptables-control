@@ -8,6 +8,7 @@ import { NginxDomainsPage } from './pages/NginxDomainsPage'
 import { AuditLogPage } from './pages/AuditLogPage'
 import { TrafficPage } from './pages/TrafficPage'
 import { WireGuardPage } from './pages/WireGuardPage'
+import { SettingsPage } from './pages/SettingsPage'
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
         <Route path="/traffic" element={<TrafficPage />} />
         <Route path="/wireguard" element={<WireGuardPage />} />
         <Route path="/logs" element={<AuditLogPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
       </Route>
     </Routes>
   )
