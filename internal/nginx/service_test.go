@@ -35,6 +35,22 @@ func mustCreate(t *testing.T, svc *Service, req CreateDomainRequest) *Domain {
 	return domain
 }
 
+func TestRebuildTargets(t *testing.T) {
+	domains := []Domain{
+		{Domain: "enabled-ssl.example.com", Enabled: true, SSLEnabled: true},
+		{Domain: "enabled-nossl.example.com", Enabled: true, SSLEnabled: false},
+		{Domain: "disabled-ssl.example.com", Enabled: false, SSLEnabled: true},
+	}
+
+	targets := rebuildTargets(domains)
+	if len(targets) != 1 {
+		t.Fatalf("expected 1 target, got %d", len(targets))
+	}
+	if targets[0].Domain != "enabled-ssl.example.com" {
+		t.Errorf("expected 'enabled-ssl.example.com', got %q", targets[0].Domain)
+	}
+}
+
 func TestCreateDomain_Success(t *testing.T) {
 	svc := setupNginxTest(t)
 

@@ -390,7 +390,10 @@ func (s *Service) configPath(domain string) string {
 	return filepath.Join(s.sitesDir, fmt.Sprintf("sc_%s.conf", domain))
 }
 
-func (s *Service) writeAndReload(domain *Domain) error {
+// writeConfig renders and writes the nginx config for a domain and validates
+// it with `nginx -t`, rolling back (removing the file) on test failure. It does
+// NOT reload nginx — callers reload once they have written all configs.
+func (s *Service) writeConfig(domain *Domain) error {
 	if runtime.GOOS != "linux" {
 		slog.Warn("nginx config write skipped on non-Linux", "domain", domain.Domain)
 		return nil
@@ -415,12 +418,34 @@ func (s *Service) writeAndReload(domain *Domain) error {
 		return fmt.Errorf("nginx config test failed: %s: %w", string(output), err)
 	}
 
+	return nil
+}
+
+func (s *Service) writeAndReload(domain *Domain) error {
+	if err := s.writeConfig(domain); err != nil {
+		return err
+	}
 	s.reloadNginx()
 	return nil
 }
 
-// RebuildAll re-renders and reloads nginx configs for all enabled domains.
-// Used when a global setting (e.g. force TLS 1.2) changes.
+// rebuildTargets returns the domains whose nginx config depends on global
+// SSL settings: enabled domains that have SSL. Non-SSL domains are skipped
+// because ForceTLS12 / http2 only affect the SSL server block.
+func rebuildTargets(domains []Domain) []*Domain {
+	var targets []*Domain
+	for i := range domains {
+		d := &domains[i]
+		if d.Enabled && d.SSLEnabled {
+			targets = append(targets, d)
+		}
+	}
+	return targets
+}
+
+// RebuildAll re-renders and reloads nginx configs for all SSL-enabled domains.
+// Used when a global setting (e.g. force TLS 1.2) changes. It reloads nginx once
+// after writing all configs rather than per domain.
 func (s *Service) RebuildAll() error {
 	if runtime.GOOS != "linux" {
 		return nil
@@ -429,14 +454,16 @@ func (s *Service) RebuildAll() error {
 	if err != nil {
 		return fmt.Errorf("get domains: %w", err)
 	}
-	for i := range domains {
-		d := &domains[i]
-		if !d.Enabled {
+	written := 0
+	for _, d := range rebuildTargets(domains) {
+		if err := s.writeConfig(d); err != nil {
+			slog.Error("failed to rebuild nginx config", "error", err, "domain", d.Domain)
 			continue
 		}
-		if err := s.writeAndReload(d); err != nil {
-			slog.Error("failed to rebuild nginx config", "error", err, "domain", d.Domain)
-		}
+		written++
+	}
+	if written > 0 {
+		s.reloadNginx()
 	}
 	return nil
 }
