@@ -391,8 +391,9 @@ func (s *Service) configPath(domain string) string {
 }
 
 // writeConfig renders and writes the nginx config for a domain and validates
-// it with `nginx -t`, rolling back (removing the file) on test failure. It does
-// NOT reload nginx — callers reload once they have written all configs.
+// it with `nginx -t`, rolling back on test failure (restoring the previous
+// config if one existed, otherwise removing the brand-new file). It does NOT
+// reload nginx — callers reload once they have written all configs.
 func (s *Service) writeConfig(domain *Domain) error {
 	if runtime.GOOS != "linux" {
 		slog.Warn("nginx config write skipped on non-Linux", "domain", domain.Domain)
@@ -405,6 +406,7 @@ func (s *Service) writeConfig(domain *Domain) error {
 	}
 
 	path := s.configPath(domain.Domain)
+	prev, prevErr := os.ReadFile(path) // prevErr != nil => no prior config existed
 	if err := os.WriteFile(path, content, 0644); err != nil {
 		return fmt.Errorf("write config file: %w", err)
 	}
@@ -413,8 +415,16 @@ func (s *Service) writeConfig(domain *Domain) error {
 	cmd := exec.Command("nginx", "-t")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		// Rollback: remove bad config
-		os.Remove(path)
+		// Roll back: restore the previous working config if one existed,
+		// otherwise remove the brand-new (bad) file. Prevents a failed
+		// rebuild from taking an already-online domain offline.
+		if prevErr == nil {
+			if wErr := os.WriteFile(path, prev, 0644); wErr != nil {
+				slog.Error("failed to restore previous nginx config after failed test", "error", wErr, "domain", domain.Domain)
+			}
+		} else {
+			os.Remove(path)
+		}
 		return fmt.Errorf("nginx config test failed: %s: %w", string(output), err)
 	}
 
