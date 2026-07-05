@@ -74,12 +74,21 @@ server {
 }
 
 server {
-    listen 443 ssl;
+    listen 443 ssl http2;
     server_name {{.Domain}};
 
     ssl_certificate /etc/letsencrypt/live/{{.Domain}}/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/{{.Domain}}/privkey.pem;
+{{- if .ForceTLS12}}
+    ssl_protocols TLSv1.2;
+    ssl_prefer_server_ciphers off;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+{{- else}}
     include /etc/letsencrypt/options-ssl-nginx.conf;
+{{- end}}
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 {{template "locations" .}}
 }
@@ -106,9 +115,10 @@ type configData struct {
 	HasAuth           bool
 	BackendPort       int
 	SSLEnabled        bool
+	ForceTLS12        bool
 }
 
-func renderConfig(d *Domain, backendPort int) ([]byte, error) {
+func renderConfig(d *Domain, backendPort int, forceTLS12 bool) ([]byte, error) {
 	scheme := d.UpstreamScheme
 	if scheme == "" {
 		scheme = "http"
@@ -122,6 +132,7 @@ func renderConfig(d *Domain, backendPort int) ([]byte, error) {
 		HasAuth:           d.AuthEnabled,
 		BackendPort:       backendPort,
 		SSLEnabled:        d.SSLEnabled,
+		ForceTLS12:        forceTLS12,
 	}
 	var buf bytes.Buffer
 	if err := confTmpl.Execute(&buf, data); err != nil {
