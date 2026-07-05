@@ -144,6 +144,10 @@ export interface WireguardPeerConfig {
   qrCode?: string
 }
 
+export interface Settings {
+  forceTls12: boolean
+}
+
 export interface ApiResponse<T> {
   success: boolean
   data?: T
