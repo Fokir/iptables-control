@@ -28,3 +28,13 @@ func TestSetForceTLS12_PersistsAndNotifies(t *testing.T) {
 		t.Error("expected change listener to be notified")
 	}
 }
+
+func TestSetForceTLS12_NoListener(t *testing.T) {
+	svc := NewService(setupRepo(t))
+	if err := svc.SetForceTLS12(true); err != nil {
+		t.Fatalf("SetForceTLS12 without listener: %v", err)
+	}
+	if !svc.ForceTLS12() {
+		t.Error("expected ForceTLS12 true after set with no listener")
+	}
+}

@@ -40,5 +40,5 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 		httputil.Error(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	httputil.JSON(w, http.StatusOK, settingsDTO{ForceTLS12: h.svc.ForceTLS12()})
+	httputil.JSON(w, http.StatusOK, settingsDTO{ForceTLS12: req.ForceTLS12})
 }
